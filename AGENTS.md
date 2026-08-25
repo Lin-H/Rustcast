@@ -98,5 +98,5 @@ cargo run --example seek_probe       # HTTP Range 字节正确性专项
 
 ## Git 工作流
 
-- 远程：`git@github.com:Lin-H/Rustcast.git`（分支 main）
+- 远程：`git@github.com:Lin-H/Rustcast.git`（分支 master，默认分支）
 - 版本标签：`v0.1` 起，发布时打 tag 并推送
