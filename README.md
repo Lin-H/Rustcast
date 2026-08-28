@@ -1,116 +1,121 @@
 # Rustcast
 
-一款使用 **Rust + [iced](https://iced.rs)** 构建的现代化 RSS 播客阅读器。当前处于 **M1 里程碑**：以 RSS 音频（播客）流式播放为核心功能。
+一款使用 **Tauri 2 + Preact + Tailwind CSS** 构建的轻量 RSS 播客阅读器。当前处于 M1 重构里程碑：默认加载 Syntax FM，渲染单集列表，并通过 WebView 音频完成流式播放。
 
-![status](https://img.shields.io/badge/version-0.1-blue) ![milestone](https://img.shields.io/badge/milestone-M1%20%E6%B5%81%E5%AA%92%E4%BD%93%E6%92%AD%E6%94%BE-green)
+![status](https://img.shields.io/badge/version-0.2-blue) ![milestone](https://img.shields.io/badge/milestone-M1%20Tauri%20%E9%87%8D%E6%9E%84-green)
 
 ## ✨ 功能特性（M1）
 
-- 📡 **RSS 订阅解析** — 支持 RSS/Atom，自动提取单集、时长、封面与 show notes
-- 🔊 **纯流式播放** — 基于 HTTP Range 边下边播，点击即听，无需等待下载
-- ⏯️ **完整播放控制** — 播放/暂停、任意位置拖拽跳转（前向 & 后向）、音量百分比调节
-- 🎨 **现代化深色 UI** — 双栏布局 + 底部常驻播放条，深色主题配琥珀橙强调色
-- 🖼️ **封面 Artwork** — 订阅源列表 / 单集卡片 / 播放条三处封面展示
-- 📝 **Show notes 阅读面板** — 播放中的单集在卡片内展示 content:encoded 正文（可滚动）
-- 🚄 **分页渲染** — 大订阅源（600+ 集）流畅不卡顿
+- 📡 **RSS 订阅解析** — Rust 后端使用 `feed-rs` 解析 RSS/Atom，提取单集、时长、封面与 show notes
+- 🔊 **WebView 流式播放** — Preact 使用单例 `<audio>` 播放远程音频，点击即听
+- ⏯️ **完整播放控制** — 播放/暂停、进度 seek、音量百分比调节
+- 🧾 **Show notes** — 播放中的单集展示受限 HTML 内容；链接通过系统浏览器打开
+- 🖼️ **封面展示** — 订阅源、单集和播放条封面展示，加载失败时自动回落
+- 🚄 **分页渲染** — 首屏 60 集，每次追加 150 集，避免长列表一次性渲染
+- 🎨 **深色琥珀 UI** — Tailwind 设计令牌重建深色主题，中文界面
 
 ## 🛠️ 技术栈
 
 | 层 | 选型 | 说明 |
 |---|---|---|
-| GUI | `iced 0.14` | Elm 架构，Rust 2024 edition |
-| 音频输出 | `rodio 0.22` | 新版 `DeviceSinkBuilder` + `Player` API |
-| 解码 | rodio 内置 symphonia 后端 | MP3 / AAC |
-| 网络流 | `reqwest 0.13 (blocking)` | 流式 body + HTTP Range seek |
-| RSS 解析 | `feed-rs 2.4` | 统一 RSS/Atom/JSON Feed 数据模型 |
+| 桌面壳 | Tauri 2 | Windows 优先开发；保留跨平台打包能力 |
+| 前端 | Preact + TypeScript | 轻量 UI 和类型化状态 |
+| 样式 | Tailwind CSS v4 | 设计令牌集中在 `src/index.css` |
+| 状态 | Rematch | Feed 与播放器两个模型 |
+| 播放 | HTMLAudioElement | 播放状态由前端音频服务驱动 |
+| RSS | feed-rs + reqwest | Rust command 抓取并解析默认订阅源 |
+| 外链 | tauri-plugin-opener | 仅授权 HTTP/HTTPS，通过系统浏览器打开 |
 
 ## 🏗️ 架构
 
-```
-┌────────────────────────────────────────────────┐
-│ iced 主线程 (Elm: update / view / subscription) │
-│   每 250ms 轮询 Arc<Mutex<Snapshot>> 刷新 UI    │
-└───────────────┬────────────────────────────────┘
-                │ mpsc Command (Load/Seek/Volume…)
-┌───────────────▼────────────────────────────────┐
-│ audio-engine 线程                               │
-│   Player ── Decoder(DecoderBuilder, byte_len)   │
-│              └─ BufReader(512KB)                │
-│                  └─ HttpStreamSource            │
-│                      ├─ Read: 流式响应体         │
-│                      └─ Seek: 前向=丢弃读         │
-│                             后向=Range 206 重请求 │
-└────────────────────────────────────────────────┘
+```text
+┌────────────────────────────────────────────┐
+│ Preact WebView                             │
+│ Rematch state → UI                         │
+│ audioService → HTMLAudioElement            │
+│ DOMPurify → 受限 show notes                │
+└───────────────┬────────────────────────────┘
+                │ Tauri IPC: load_default_feed
+┌───────────────▼────────────────────────────┐
+│ Rust backend                               │
+│ reqwest → feed-rs → FeedDto / EpisodeDto   │
+└────────────────────────────────────────────┘
 ```
 
-关键设计：
+关键决策：
 
-- **HttpStreamSource**：实现 `Read + Seek` 的 HTTP 流适配器。前向 seek 用"读并丢弃"，后向 seek 发起新的 Range 请求（校验必须返回 206，防止 CDN 忽略导致错位）。
-- **DecoderBuilder 必须声明 `byte_len` + `seekable(true)`**：symphonia 的 MP3 demuxer 做后向 seek 时需要字节总长度估算目标位置，否则报 `ForwardOnly / RandomAccessNotSupported`。
-- **独立引擎线程 + 快照轮询**：UI 与音频完全解耦，命令走 mpsc，状态走 `Arc<Mutex<Snapshot>>`。
-- **分页渲染**：首屏 60 张卡片，避免大列表每帧全量重建拖垮事件循环。
+- **Rust 只负责 RSS 抓取与解析**，不代理音频或图片。
+- **M1 只暴露 `load_default_feed()`**，订阅 URL 不由 IPC 参数传入。
+- **音频完全由前端 `<audio>` 管理**，避免 Rust 音频引擎与解码栈常驻内存。
+- **`http://` 音频和封面在 Rust 端升级为 `https://`**；播放失败时在播放条显示错误。
+- **show notes 不直接信任 RSS HTML**：DOMPurify 白名单净化后渲染。
 
-## 🚀 快速开始
+## 🚀 开发与验证
 
 ```bash
-# 运行（推荐 release 构建，渲染性能显著更好）
-cargo run --release
+pnpm install
+pnpm tauri dev          # 启动桌面应用
 
-# debug 构建
-cargo run
+pnpm typecheck          # TypeScript 检查
+pnpm build              # TypeScript + Vite production build
+cargo check             # 在 src-tauri/ 内执行
+cargo test              # 在 src-tauri/ 内执行
+pnpm tauri build        # 生产桌面包
 ```
 
-默认加载测试订阅源 Syntax FM（`https://feed.syntax.fm/`），启动后点击任意单集即可播放。
+默认订阅源定义在 `src-tauri/src/feed.rs`：
 
-### 引擎探针（无头回归工具）
-
-修改音频链路代码后建议跑一遍：
-
-```bash
-cargo run --example engine_probe     # 全链路：加载→音量→前向→两次后向 seek
-cargo run --example backward_probe   # 复刻生产管线，专测后向 seek
-cargo run --example seek_probe       # 字节级验证 Range 正确性
+```rust
+pub const SYNTAX_FEED_URL: &str = "https://feed.syntax.fm/";
 ```
 
 ## 📂 目录结构
 
-```
+```text
 src/
-├── main.rs      # iced 应用：状态机、双栏布局、底部播放条
-├── lib.rs       # 库入口（供 examples 复用）
-├── feed.rs      # feed-rs 解析、HTML 剥离、数据模型
-├── player.rs    # 音频引擎线程、HttpStreamSource、命令协议
-└── theme.rs     # 设计令牌（深色系 + 琥珀橙 #FFB454）与组件样式
-examples/        # 无头引擎探针
-assets/icons/    # 内嵌 SVG 图标
+├── App.tsx               # 应用布局与音频事件绑定
+├── components/           # 顶栏、侧栏、列表、卡片、播放条
+├── lib/                  # 时间格式化和 HTML 净化
+├── services/             # Tauri IPC 与单例 audio 服务
+├── store/                # Rematch store 和模型
+└── types.ts              # Feed/Episode DTO 类型
+
+src-tauri/
+├── capabilities/         # Tauri capability 与 opener 权限
+├── src/feed.rs           # RSS 抓取、解析、DTO 和 URL 规范化
+├── src/main.rs           # Tauri builder 与 command
+└── tauri.conf.json       # 窗口、CSP、打包配置
 ```
 
 ## ⚠️ 已知限制
 
-- 单集缩略图暂用频道 logo 兜底（仅播放中的单集拉取独立封面）
-- 进度 seek 依赖服务器支持 HTTP Range（主流播客 CDN 均支持）
-- 音量为线性标度，中低段听感变化不明显
-- 描述为纯文本（HTML 已剥离），不支持富文本/图片渲染
-- Windows 下首次编译依赖较多，需 MSVC Build Tools
+- 界面目前只有内置 Syntax FM 订阅源；订阅源管理计划在 M2。
+- 无音频的单集会显示为“无法播放”，不会进入播放状态。
+- 某些播客 CDN 的音频格式依赖系统 WebView 能力；不支持时显示中文错误。
+- 进度 seek 依赖 WebView 的媒体 Range 请求实现。
+- Windows 是当前主要验证平台；Linux/macOS 包可在后续里程碑再验证。
 
 ## 🗺️ Roadmap
 
-### M2 — 订阅管理（下一个里程碑）
+### M2 — 订阅管理
+
 - [ ] 界面内添加 / 删除订阅源
-- [ ] SQLite 持久化（rusqlite bundled）：订阅、单集元数据
-- [ ] 每集播放进度记忆，重启后"继续收听"
+- [ ] SQLite 持久化订阅和单集元数据
+- [ ] 每集播放进度记忆
 - [ ] 手动刷新订阅
 
 ### M3 — 播客体验增强
-- [ ] 倍速播放（0.5x ~ 3x，rodio `set_speed`）
-- [ ] 快进快退 ±15s 按钮
+
+- [ ] 倍速播放
+- [ ] ±15 秒快进快退
 - [ ] OPML 导入导出
-- [ ] 封面磁盘缓存；单集列表懒加载独立封面
-- [ ] 音量对数标度（更符合听感）
+- [ ] 封面磁盘缓存与懒加载
+- [ ] 音量对数标度
 
 ### M4 — 平台化
+
+- [ ] Linux/macOS 构建验证
 - [ ] 系统托盘 / 最小化到托盘
 - [ ] 全局媒体键控制
-- [ ] 虚拟化长列表（替代分页按钮）
-- [ ] 深浅双主题切换
-- [ ] 多语言（中文 / English）
+- [ ] 虚拟化长列表
+- [ ] 深浅主题切换与多语言
