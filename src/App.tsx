@@ -23,6 +23,7 @@ export function App() {
       onEnded: () => dispatch.player.finished(),
       onTimeUpdate: (seconds) => dispatch.player.timeUpdated(seconds),
       onDurationDiscovered: (seconds) => dispatch.player.durationDiscovered(seconds),
+      onRecoveryStarted: () => dispatch.player.recoveryStarted(),
       onError: (message) => dispatch.player.errorRaised(message),
     });
   }, []);

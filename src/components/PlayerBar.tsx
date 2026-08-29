@@ -7,6 +7,7 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
   const episode = useAppSelector((state) => state.player.episode);
   const isPlaying = useAppSelector((state) => state.player.isPlaying);
   const buffering = useAppSelector((state) => state.player.buffering);
+  const recovering = useAppSelector((state) => state.player.recovering);
   const finished = useAppSelector((state) => state.player.finished);
   const currentTime = useAppSelector((state) => state.player.currentTime);
   const duration = useAppSelector((state) => state.player.duration);
@@ -28,8 +29,10 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
   const progressValue = scrubbing
     ? Math.min(scrubValue, progressMax)
     : Math.min(currentTime, progressMax);
-  const statusText = buffering
-    ? "缓冲中…"
+  const statusText = recovering
+    ? "网络恢复中…"
+    : buffering
+      ? "缓冲中…"
     : finished
       ? "已播完"
       : isPlaying

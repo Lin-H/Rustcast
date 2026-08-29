@@ -7,6 +7,7 @@ export interface PlayerState {
   episode: EpisodeDto | null;
   isPlaying: boolean;
   buffering: boolean;
+  recovering: boolean;
   finished: boolean;
   currentTime: number;
   duration: number;
@@ -20,6 +21,7 @@ const initialState: PlayerState = {
   episode: null,
   isPlaying: false,
   buffering: false,
+  recovering: false,
   finished: false,
   currentTime: 0,
   duration: 0,
@@ -38,6 +40,7 @@ export const playerModel = createModel<RootModel>()({
         episode,
         isPlaying: true,
         buffering: true,
+        recovering: false,
         finished: false,
         currentTime: 0,
         duration: episode.durationSecs ?? 0,
@@ -47,13 +50,22 @@ export const playerModel = createModel<RootModel>()({
       };
     },
     playing(state): PlayerState {
-      return { ...state, isPlaying: true, buffering: false };
+      return { ...state, isPlaying: true, buffering: false, recovering: false };
     },
     paused(state): PlayerState {
       return { ...state, isPlaying: false };
     },
     buffering(state): PlayerState {
       return { ...state, buffering: true };
+    },
+    recoveryStarted(state): PlayerState {
+      return {
+        ...state,
+        isPlaying: true,
+        buffering: true,
+        recovering: true,
+        error: null,
+      };
     },
     finished(state): PlayerState {
       return { ...state, isPlaying: false, buffering: false, finished: true };
@@ -69,7 +81,13 @@ export const playerModel = createModel<RootModel>()({
       return { ...state, volume };
     },
     errorRaised(state, error: string): PlayerState {
-      return { ...state, isPlaying: false, buffering: false, error };
+      return {
+        ...state,
+        isPlaying: false,
+        buffering: false,
+        recovering: false,
+        error,
+      };
     },
     scrubStarted(state): PlayerState {
       return { ...state, scrubbing: true, scrubValue: state.currentTime };
