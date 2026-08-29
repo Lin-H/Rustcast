@@ -2,7 +2,7 @@ import { createModel } from "@rematch/core";
 import { audioPlayer } from "../../services/audio";
 import { saveProgress } from "../../services/tauri";
 import type { EpisodeDto } from "../../types";
-import type { RootModel } from "../index";
+import { store, type RootModel } from "../index";
 
 export interface PlayerState {
   episode: EpisodeDto | null;
@@ -63,7 +63,11 @@ async function persistProgress(completed: boolean): Promise<void> {
   try {
     await saveProgress({
       episodeId: context.episodeId,
-      positionSecs: completed ? (duration !== null ? duration : position) : position,
+      positionSecs: completed
+        ? duration !== null
+          ? duration
+          : position
+        : position,
       durationSecs: duration,
       completed,
     });
@@ -115,7 +119,8 @@ export const playerModel = createModel<RootModel>()({
       return { ...state, currentTime: seconds };
     },
     durationDiscovered(state, seconds: number): PlayerState {
-      const duration = Number.isFinite(seconds) && seconds > 0 ? seconds : state.duration;
+      const duration =
+        Number.isFinite(seconds) && seconds > 0 ? seconds : state.duration;
       return { ...state, duration };
     },
     volumeSet(state, volume: number): PlayerState {
@@ -135,7 +140,11 @@ export const playerModel = createModel<RootModel>()({
     },
     scrubMoved(state, seconds: number): PlayerState {
       const max = state.duration > 0 ? state.duration : Number.MAX_SAFE_INTEGER;
-      return { ...state, scrubbing: true, scrubValue: Math.min(Math.max(seconds, 0), max) };
+      return {
+        ...state,
+        scrubbing: true,
+        scrubValue: Math.min(Math.max(seconds, 0), max),
+      };
     },
     scrubCommitted(state): PlayerState {
       return { ...state, scrubbing: false };
@@ -143,6 +152,10 @@ export const playerModel = createModel<RootModel>()({
   },
   effects: (dispatch) => ({
     async playEpisode(episode: EpisodeDto): Promise<void> {
+      if (store.getState().player.episode?.id === episode.id) {
+        return;
+      }
+
       if (episode.audioUrl === null) {
         return;
       }
@@ -159,7 +172,10 @@ export const playerModel = createModel<RootModel>()({
       const progress = episode.progress;
       const resumeSeconds =
         progress !== null && !progress.completed && progress.positionSecs > 5
-          ? Math.min(progress.positionSecs, progress.durationSecs ?? Number.POSITIVE_INFINITY)
+          ? Math.min(
+              progress.positionSecs,
+              progress.durationSecs ?? Number.POSITIVE_INFINITY,
+            )
           : 0;
       pendingPosition = resumeSeconds > 0 ? resumeSeconds : null;
 
@@ -173,7 +189,9 @@ export const playerModel = createModel<RootModel>()({
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
         }
-        dispatch.player.errorRaised(error instanceof Error ? error.message : "音频播放失败");
+        dispatch.player.errorRaised(
+          error instanceof Error ? error.message : "音频播放失败",
+        );
       }
     },
     async toggle(): Promise<void> {
@@ -186,7 +204,9 @@ export const playerModel = createModel<RootModel>()({
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
         }
-        dispatch.player.errorRaised(error instanceof Error ? error.message : "音频播放失败");
+        dispatch.player.errorRaised(
+          error instanceof Error ? error.message : "音频播放失败",
+        );
       }
     },
     seek(seconds: number): void {
