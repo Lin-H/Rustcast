@@ -7,7 +7,7 @@ export function TopBar() {
         <BrandIcon className="h-[22px] w-[22px] text-accent" />
         <span class="text-[17px] font-bold text-primary">Rustcast</span>
       </div>
-      <span class="ml-auto text-xs text-faint">RSS 音频播放器 · M1</span>
+      <span class="ml-auto text-xs text-faint">RSS 音频播放器 · M2</span>
     </header>
   );
 }

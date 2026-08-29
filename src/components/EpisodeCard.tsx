@@ -19,6 +19,11 @@ export function EpisodeCard({
   onPlay,
 }: EpisodeCardProps) {
   const disabled = episode.audioUrl === null;
+  const progress = episode.progress;
+  const progressPercent =
+    progress !== null && progress.durationSecs !== null && progress.durationSecs > 0
+      ? Math.min(100, (progress.positionSecs / progress.durationSecs) * 100)
+      : null;
 
   return (
     <button
@@ -60,6 +65,27 @@ export function EpisodeCard({
           <p class="mt-1 line-clamp-3 text-[13.5px] text-secondary">
             {episode.description}
           </p>
+          {progress !== null && !isCurrent && (
+            <div class="mt-1.5 flex items-center gap-2">
+              {progressPercent !== null ? (
+                <>
+                  <div class="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-root">
+                    <div
+                      class="h-full rounded-full bg-accent"
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+                  <span class="shrink-0 text-[10.5px] text-faint">
+                    {progress.completed ? "已播完" : `已播 ${Math.round(progressPercent)}%`}
+                  </span>
+                </>
+              ) : (
+                <span class="text-[10.5px] text-faint">
+                  {progress.completed ? "已播完" : `上次听到 ${formatTime(progress.positionSecs)}`}
+                </span>
+              )}
+            </div>
+          )}
           {isCurrent && episode.articleHtml !== "" && (
             <div class="mt-1.5">
               <ShowNotes html={episode.articleHtml} />

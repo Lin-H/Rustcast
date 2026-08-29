@@ -262,16 +262,16 @@ export function bindAudioEvents(handlers: AudioEventHandlers): () => void {
 }
 
 export const audioPlayer = {
-  async load(url: string): Promise<void> {
+  async load(url: string, resumeSeconds = 0): Promise<void> {
     activeUrl = url;
     desiredPlaying = true;
     recovering = false;
     recoveryAttempts = 0;
-    pendingResumeSeconds = 0;
-    lastObservedSeconds = 0;
-    lastStallCheckSeconds = 0;
+    pendingResumeSeconds = resumeSeconds;
+    lastObservedSeconds = resumeSeconds;
+    lastStallCheckSeconds = resumeSeconds;
     clearRecoveryTimers();
-    resetSource(url, 0);
+    resetSource(url, resumeSeconds);
   },
   async toggle(): Promise<void> {
     if (audio.paused) {
@@ -288,6 +288,9 @@ export const audioPlayer = {
       clearRecoveryTimers();
       audio.pause();
     }
+  },
+  isPaused(): boolean {
+    return audio.paused;
   },
   seek(seconds: number): void {
     if (Number.isFinite(audio.duration)) {

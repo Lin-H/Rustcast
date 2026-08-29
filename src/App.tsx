@@ -7,9 +7,7 @@ import { bindAudioEvents } from "./services/audio";
 import { dispatch, useAppSelector } from "./store";
 
 export function App() {
-  const feed = useAppSelector((state) => state.feed.feed);
-  const loading = useAppSelector((state) => state.feed.loading);
-  const error = useAppSelector((state) => state.feed.error);
+  const selectedFeed = useAppSelector((state) => state.feed.selectedFeed);
 
   useEffect(() => {
     void dispatch.feed.load();
@@ -18,13 +16,28 @@ export function App() {
   useEffect(() => {
     return bindAudioEvents({
       onPlaying: () => dispatch.player.playing(),
-      onPause: () => dispatch.player.paused(),
+      onPause: () => {
+        dispatch.player.paused();
+        dispatch.player.flushProgress();
+      },
       onBuffering: () => dispatch.player.buffering(),
-      onEnded: () => dispatch.player.finished(),
-      onTimeUpdate: (seconds) => dispatch.player.timeUpdated(seconds),
-      onDurationDiscovered: (seconds) => dispatch.player.durationDiscovered(seconds),
+      onEnded: () => {
+        dispatch.player.finished();
+        dispatch.player.markCompleted();
+      },
+      onTimeUpdate: (seconds) => {
+        dispatch.player.timeUpdated(seconds);
+        dispatch.player.scheduleProgressSave(seconds);
+      },
+      onDurationDiscovered: (seconds) => {
+        dispatch.player.durationDiscovered(seconds);
+        dispatch.player.durationObserved(seconds);
+      },
       onRecoveryStarted: () => dispatch.player.recoveryStarted(),
-      onError: (message) => dispatch.player.errorRaised(message),
+      onError: (message) => {
+        dispatch.player.errorRaised(message);
+        dispatch.player.flushProgress();
+      },
     });
   }, []);
 
@@ -32,10 +45,10 @@ export function App() {
     <div class="flex h-full min-h-0 flex-col bg-root text-primary">
       <TopBar />
       <div class="flex min-h-0 flex-1">
-        <Sidebar feed={feed} loading={loading} error={error} />
-        <EpisodeList fallbackImage={feed?.logoUrl ?? null} />
+        <Sidebar />
+        <EpisodeList />
       </div>
-      <PlayerBar fallbackImage={feed?.logoUrl ?? null} />
+      <PlayerBar fallbackImage={selectedFeed?.feed.logoUrl ?? null} />
     </div>
   );
 }

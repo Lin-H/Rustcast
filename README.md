@@ -1,8 +1,8 @@
 # Rustcast
 
-一款使用 **Tauri 2 + Preact + Tailwind CSS** 构建的轻量 RSS 播客阅读器。当前处于 M1 重构里程碑：默认加载 Syntax FM，渲染单集列表，并通过 WebView 音频完成流式播放。
+一款使用 **Tauri 2 + Preact + Tailwind CSS** 构建的轻量 RSS 播客阅读器。当前处于 M2 订阅管理里程碑：多订阅源管理、SQLite 持久化与每集播放进度记忆，并通过 WebView 音频完成流式播放。
 
-![status](https://img.shields.io/badge/version-0.2-blue) ![milestone](https://img.shields.io/badge/milestone-M1%20Tauri%20%E9%87%8D%E6%9E%84-green)
+![status](https://img.shields.io/badge/version-0.2-blue) ![milestone](https://img.shields.io/badge/milestone-M2%20%E8%AE%A2%E9%98%85%E7%AE%A1%E7%90%86-green)
 
 ## ✨ 功能特性（M1）
 
@@ -13,6 +13,12 @@
 - 🖼️ **封面展示** — 订阅源、单集和播放条封面展示，加载失败时自动回落
 - 🚄 **分页渲染** — 首屏 60 集，每次追加 150 集，避免长列表一次性渲染
 - 🎨 **深色琥珀 UI** — Tailwind 设计令牌重建深色主题，中文界面
+
+## ✨ 功能特性（M2）
+
+- 📚 **多订阅源管理** — 侧栏添加 / 删除 / 切换订阅源，手动刷新
+- 💾 **SQLite 持久化** — 订阅源、单集元数据与播放进度保存在本地数据库
+- ▶️ **续播记忆** — 每集进度自动保存，再次播放从上次位置继续
 
 ## 🛠️ 技术栈
 
@@ -35,20 +41,21 @@
 │ audioService → HTMLAudioElement            │
 │ DOMPurify → 受限 show notes                │
 └───────────────┬────────────────────────────┘
-                │ Tauri IPC: load_default_feed
+                │ Tauri IPC: load_initial_state / add_feed / refresh_feed / save_progress
 ┌───────────────▼────────────────────────────┐
 │ Rust backend                               │
-│ reqwest → feed-rs → FeedDto / EpisodeDto   │
+│ reqwest → feed-rs → SQLite                 │
 └────────────────────────────────────────────┘
 ```
 
 关键决策：
 
-- **Rust 只负责 RSS 抓取与解析**，不代理音频或图片。
-- **M1 只暴露 `load_default_feed()`**，订阅 URL 不由 IPC 参数传入。
+- **Rust 负责 RSS 抓取、解析与 SQLite 持久化**，不代理音频或图片。
+- **M2 通过 IPC 接收订阅 URL**，Rust 端负责规范化、哈希去重并写入 SQLite。
 - **音频完全由前端 `<audio>` 管理**，避免 Rust 音频引擎与解码栈常驻内存。
 - **`http://` 音频和封面在 Rust 端升级为 `https://`**；播放失败时在播放条显示错误。
 - **show notes 不直接信任 RSS HTML**：DOMPurify 白名单净化后渲染。
+- **播放进度由前端定时、暂停与播完时写入 SQLite**，再次播放自动续播。
 
 ## 🚀 开发与验证
 
@@ -63,10 +70,10 @@ cargo test              # 在 src-tauri/ 内执行
 pnpm tauri build        # 生产桌面包
 ```
 
-默认订阅源定义在 `src-tauri/src/feed.rs`：
+默认订阅源定义在 `src-tauri/src/feed.rs`，首次启动且数据库为空时自动订阅：
 
 ```rust
-pub const SYNTAX_FEED_URL: &str = "https://feed.syntax.fm/";
+pub const DEFAULT_FEED_URL: &str = "https://feed.syntax.fm/";
 ```
 
 ## 📂 目录结构
@@ -82,6 +89,7 @@ src/
 
 src-tauri/
 ├── capabilities/         # Tauri capability 与 opener 权限
+├── src/db.rs             # SQLite 迁移、订阅/单集/进度读写
 ├── src/feed.rs           # RSS 抓取、解析、DTO 和 URL 规范化
 ├── src/main.rs           # Tauri builder 与 command
 └── tauri.conf.json       # 窗口、CSP、打包配置
@@ -89,7 +97,7 @@ src-tauri/
 
 ## ⚠️ 已知限制
 
-- 界面目前只有内置 Syntax FM 订阅源；订阅源管理计划在 M2。
+- 首次启动自动订阅 Syntax FM；可在侧栏添加更多订阅源。
 - 无音频的单集会显示为“无法播放”，不会进入播放状态。
 - 某些播客 CDN 的音频格式依赖系统 WebView 能力；不支持时显示中文错误。
 - 进度 seek 依赖 WebView 的媒体 Range 请求实现。
@@ -99,10 +107,10 @@ src-tauri/
 
 ### M2 — 订阅管理
 
-- [ ] 界面内添加 / 删除订阅源
-- [ ] SQLite 持久化订阅和单集元数据
-- [ ] 每集播放进度记忆
-- [ ] 手动刷新订阅
+- [x] 界面内添加 / 删除订阅源
+- [x] SQLite 持久化订阅和单集元数据
+- [x] 每集播放进度记忆
+- [x] 手动刷新订阅
 
 ### M3 — 播客体验增强
 

@@ -5,7 +5,7 @@
 ## 项目概览
 
 - **名称**：Rustcast — Tauri + Preact 的 RSS 播客阅读器
-- **当前里程碑**：M1 Tauri 重构（默认 Syntax FM + WebView 流式播放）
+- **当前里程碑**：M2 订阅管理（多订阅源 + SQLite 持久化 + 播放进度记忆）
 - **主要平台**：Windows；Linux/macOS 构建留到后续里程碑验证
 - **UI 语言**：中文；代码注释保持最少必要
 
@@ -41,30 +41,33 @@ cargo test
 | `src/store/` | Rematch store；`feed` 和 `player` 两个模型 |
 | `src/lib/sanitize.ts` | DOMPurify 白名单净化 show notes |
 | `src/index.css` | Tailwind v4 与深色琥珀设计令牌 |
-| `src-tauri/src/main.rs` | Tauri builder 与 `load_default_feed` command |
+| `src-tauri/src/main.rs` | Tauri builder 与全部 M2 command 注册 |
 | `src-tauri/src/feed.rs` | RSS 抓取、解析、DTO、URL 规范化 |
+| `src-tauri/src/db.rs` | SQLite 迁移与订阅、单集、播放进度读写 |
 | `src-tauri/capabilities/` | WebView capability 和 opener 限制 |
 | `src-tauri/tauri.conf.json` | 窗口、CSP、dev/build 流程与打包配置 |
 
 ## 数据流
 
-1. App 启动时调用 `dispatch.feed.load()`。
-2. Feed effect 通过 `invoke("load_default_feed")` 调用 Rust command。
-3. Rust 使用 reqwest 下载 XML，feed-rs 解析成 `FeedDto` / `EpisodeDto`。
-4. Preact Rematch store 保存 feed 和分页状态。
-5. 点击可播放单集时，`player` effect 调用 `audioService.load()`。
-6. 单例 `<audio>` 事件回写 player 状态，驱动列表徽标和播放条。
+1. App 启动时调用 `dispatch.feed.load()`，经 `invoke("load_initial_state_command")` 读取订阅列表与选中订阅。
+2. 首次启动数据库为空时，Rust 自动订阅内置 Syntax FM；添加 / 刷新 / 删除分别走 `add_feed_command` / `refresh_feed_command` / `delete_feed_command`。
+3. Rust 使用 reqwest 下载 XML，feed-rs 解析后写入 SQLite，再以 DTO 返回给 WebView。
+4. Preact Rematch store 保存订阅列表、选中订阅和分页状态。
+5. 点击可播放单集时，`player` effect 从 `progress.positionSecs` 续播并调用 `audioService.load()`。
+6. 播放进度由前端定时（约 5 秒）、暂停与播完时调用 `save_progress_command` 持久化。
+7. 单例 `<audio>` 事件回写 player 状态，驱动列表徽标和播放条。
 
 ## 关键规则与决策
 
 - **不要重新引入 rodio 或 Rust 音频线程**；M1 重构目标是让播放状态和内存压力留在 WebView 的 `<audio>` 生命周期内。
-- **不要让前端传订阅 URL 给 IPC**；M1 只有 Rust 常量里的 Syntax FM。
+- **订阅 URL 由前端经 IPC 传入**；Rust 端负责规范化、哈希去重与 SQLite 持久化，首次启动自动订阅内置 Syntax FM。
 - **媒体 URL 只接受 HTTP/HTTPS**；HTTP 会升级为 HTTPS，其他协议返回 `null`。
 - **无音频单集必须保留在列表中**，卡片禁用并显示“无法播放”。
 - **不要直接 `dangerouslySetInnerHTML` 原始 RSS HTML**；必须经过 `sanitizeShowNotes()`。
 - **WebView 内不要发生页面级导航**；show notes 链接用 `openExternal()` 交给系统浏览器。
 - **不要把 `HTMLAudioElement` 放进 Rematch state**；Rematch state 保持可序列化。
 - 播放器同一时间只有一个 current episode；选中、展开和播放语义沿用 M1。
+- **播放进度由前端驱动并落库**；通过 `save_progress_command` 写入 SQLite，Rematch state 保持可序列化。
 
 ## 版本陷阱记录
 
