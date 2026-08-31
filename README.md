@@ -1,8 +1,8 @@
 # Rustcast
 
-一款使用 **Tauri 2 + Preact + Tailwind CSS** 构建的轻量 RSS 播客阅读器。当前处于 M2 订阅管理里程碑：多订阅源管理、SQLite 持久化与每集播放进度记忆，并通过 WebView 音频完成流式播放。
+一款使用 **Tauri 2 + Preact + Tailwind CSS** 构建的轻量 RSS 播客阅读器。M2 订阅管理已完成（v0.2.0）：多订阅源管理、本地 SQLite 持久化与每集播放进度记忆，并通过 WebView 音频完成流式播放。
 
-![status](https://img.shields.io/badge/version-0.2-blue) ![milestone](https://img.shields.io/badge/milestone-M2%20%E8%AE%A2%E9%98%85%E7%AE%A1%E7%90%86-green)
+![status](https://img.shields.io/badge/version-0.2.0-blue) ![milestone](https://img.shields.io/badge/milestone-M2%20done-brightgreen)
 
 ## ✨ 功能特性（M1）
 
@@ -16,9 +16,10 @@
 
 ## ✨ 功能特性（M2）
 
-- 📚 **多订阅源管理** — 侧栏添加 / 删除 / 切换订阅源，手动刷新
-- 💾 **SQLite 持久化** — 订阅源、单集元数据与播放进度保存在本地数据库
-- ▶️ **续播记忆** — 每集进度自动保存，再次播放从上次位置继续
+- 📚 **多订阅源管理** — 侧栏添加 / 删除 / 切换订阅源，手动刷新；上次选中的订阅源重启后自动恢复
+- 💾 **SQLite 持久化** — 订阅源、单集元数据与播放进度保存在本地 `rustcast.db`（turso 本地引擎，位于可执行文件同目录）
+- ▶️ **续播记忆** — 播放中约每 5 秒节流保存，暂停 / 出错 / 切集即时落库；再次播放从上次位置继续（进度超过 5 秒且未播完才续播）
+- 🔁 **重播保护** — 点击正在播放的单集不会重新加载音频，避免误触重启播放
 
 ## 🛠️ 技术栈
 
@@ -29,8 +30,10 @@
 | 样式 | Tailwind CSS v4 | 设计令牌集中在 `src/index.css` |
 | 状态 | Rematch | Feed 与播放器两个模型 |
 | 播放 | HTMLAudioElement | 播放状态由前端音频服务驱动 |
-| RSS | feed-rs + reqwest | Rust command 抓取并解析默认订阅源 |
+| RSS | feed-rs + reqwest | Rust command 抓取并解析任意订阅源 |
+| 存储 | turso | SQLite 兼容本地单文件库，迁移记录在 `schema_migrations` |
 | 外链 | tauri-plugin-opener | 仅授权 HTTP/HTTPS，通过系统浏览器打开 |
+| CI | GitHub Actions | `v*` 标签触发三平台构建并发布 Release |
 
 ## 🏗️ 架构
 
@@ -41,21 +44,26 @@
 │ audioService → HTMLAudioElement            │
 │ DOMPurify → 受限 show notes                │
 └───────────────┬────────────────────────────┘
-                │ Tauri IPC: load_initial_state / add_feed / refresh_feed / save_progress
+                │ Tauri IPC（8 个 command）
+                │ load_initial_state / list_feeds / load_feed / set_selected_feed
+                │ add_feed / refresh_feed / delete_feed / save_progress
 ┌───────────────▼────────────────────────────┐
 │ Rust backend                               │
-│ reqwest → feed-rs → SQLite                 │
+│ reqwest → feed-rs → turso (SQLite)         │
 └────────────────────────────────────────────┘
 ```
 
 关键决策：
 
 - **Rust 负责 RSS 抓取、解析与 SQLite 持久化**，不代理音频或图片。
-- **M2 通过 IPC 接收订阅 URL**，Rust 端负责规范化、哈希去重并写入 SQLite。
+- **订阅 URL 由前端经 IPC 传入**，Rust 端负责规范化、哈希去重并写入 SQLite。
 - **音频完全由前端 `<audio>` 管理**，避免 Rust 音频引擎与解码栈常驻内存。
 - **`http://` 音频和封面在 Rust 端升级为 `https://`**；播放失败时在播放条显示错误。
 - **show notes 不直接信任 RSS HTML**：DOMPurify 白名单净化后渲染。
-- **播放进度由前端定时、暂停与播完时写入 SQLite**，再次播放自动续播。
+- **播放进度由前端节流写入 SQLite**（约 5 秒一次），暂停、出错、切集、播完时即时落库；再次播放自动续播。
+- **同一单集重复点击不重新加载音频**；切换单集时先落库上一集进度。
+- **数据库文件 `rustcast.db` 放在可执行文件同目录**（便携式布局），迁移按名字记录在 `schema_migrations` 表。
+- **推送 `v*` 标签触发三平台 CI 构建并自动发布 GitHub Release**。
 
 ## 🚀 开发与验证
 
@@ -76,6 +84,8 @@ pnpm tauri build        # 生产桌面包
 pub const DEFAULT_FEED_URL: &str = "https://feed.syntax.fm/";
 ```
 
+发布流程由 GitHub Actions 驱动：推送 `v*` 标签触发 `.github/workflows/build.yml`，在 Windows / Linux / macOS 矩阵执行 `pnpm tauri build`，产物重命名为 `<tag>-<platform>-<文件名>` 后自动发布 GitHub Release；标签含 `-alpha` / `-beta` / `-rc` 时自动标记为预发布。
+
 ## 📂 目录结构
 
 ```text
@@ -89,10 +99,13 @@ src/
 
 src-tauri/
 ├── capabilities/         # Tauri capability 与 opener 权限
-├── src/db.rs             # SQLite 迁移、订阅/单集/进度读写
+├── src/db.rs             # turso 迁移、订阅/单集/进度读写
 ├── src/feed.rs           # RSS 抓取、解析、DTO 和 URL 规范化
 ├── src/main.rs           # Tauri builder 与 command
 └── tauri.conf.json       # 窗口、CSP、打包配置
+
+.github/
+└── workflows/build.yml   # v* 标签触发的三平台发布构建
 ```
 
 ## ⚠️ 已知限制
@@ -101,11 +114,11 @@ src-tauri/
 - 无音频的单集会显示为“无法播放”，不会进入播放状态。
 - 某些播客 CDN 的音频格式依赖系统 WebView 能力；不支持时显示中文错误。
 - 进度 seek 依赖 WebView 的媒体 Range 请求实现。
-- Windows 是当前主要验证平台；Linux/macOS 包可在后续里程碑再验证。
+- Windows 是当前主要验证平台；Linux/macOS 由 CI 发布构建覆盖，本地验证留待 M4。
 
 ## 🗺️ Roadmap
 
-### M2 — 订阅管理
+### M2 — 订阅管理 ✅ 已完成（v0.2.0）
 
 - [x] 界面内添加 / 删除订阅源
 - [x] SQLite 持久化订阅和单集元数据

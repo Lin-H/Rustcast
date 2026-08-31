@@ -5,8 +5,9 @@
 ## 项目概览
 
 - **名称**：Rustcast — Tauri + Preact 的 RSS 播客阅读器
-- **当前里程碑**：M2 订阅管理（多订阅源 + SQLite 持久化 + 播放进度记忆）
-- **主要平台**：Windows；Linux/macOS 构建留到后续里程碑验证
+- **当前里程碑**：M2 已完成（v0.2.0），多订阅源 + SQLite 持久化 + 播放进度记忆；下一步 M3 播客体验增强
+- **当前分支**：`feat/m2-turso-local-db`（M2 功能分支，待合并 master）
+- **主要平台**：Windows；Linux/macOS 由 CI 发布构建覆盖，本地验证留待 M4
 - **UI 语言**：中文；代码注释保持最少必要
 
 ## 构建与验证命令
@@ -41,20 +42,21 @@ cargo test
 | `src/store/` | Rematch store；`feed` 和 `player` 两个模型 |
 | `src/lib/sanitize.ts` | DOMPurify 白名单净化 show notes |
 | `src/index.css` | Tailwind v4 与深色琥珀设计令牌 |
-| `src-tauri/src/main.rs` | Tauri builder 与全部 M2 command 注册 |
+| `src-tauri/src/main.rs` | Tauri builder、turso 数据库注入与全部 8 个 command 注册 |
 | `src-tauri/src/feed.rs` | RSS 抓取、解析、DTO、URL 规范化 |
-| `src-tauri/src/db.rs` | SQLite 迁移与订阅、单集、播放进度读写 |
+| `src-tauri/src/db.rs` | turso 迁移与订阅、单集、播放进度读写 |
 | `src-tauri/capabilities/` | WebView capability 和 opener 限制 |
 | `src-tauri/tauri.conf.json` | 窗口、CSP、dev/build 流程与打包配置 |
+| `.github/workflows/build.yml` | `v*` 标签触发的三平台构建与 GitHub Release 发布 |
 
 ## 数据流
 
-1. App 启动时调用 `dispatch.feed.load()`，经 `invoke("load_initial_state_command")` 读取订阅列表与选中订阅。
-2. 首次启动数据库为空时，Rust 自动订阅内置 Syntax FM；添加 / 刷新 / 删除分别走 `add_feed_command` / `refresh_feed_command` / `delete_feed_command`。
-3. Rust 使用 reqwest 下载 XML，feed-rs 解析后写入 SQLite，再以 DTO 返回给 WebView。
-4. Preact Rematch store 保存订阅列表、选中订阅和分页状态。
-5. 点击可播放单集时，`player` effect 从 `progress.positionSecs` 续播并调用 `audioService.load()`。
-6. 播放进度由前端定时（约 5 秒）、暂停与播完时调用 `save_progress_command` 持久化。
+1. App 启动时调用 `dispatch.feed.load()`，经 `invoke("load_initial_state_command")` 读取订阅列表、上次选中订阅及其单集。
+2. 首次启动数据库为空时，Rust 自动订阅内置 Syntax FM；添加 / 刷新 / 删除分别走 `add_feed_command` / `refresh_feed_command` / `delete_feed_command`；切换订阅时 `set_selected_feed_command` 持久化选中项。
+3. Rust 使用 reqwest 下载 XML，feed-rs 解析后写入 turso（SQLite 兼容）数据库，再以 DTO 返回给 WebView。
+4. Preact Rematch store 保存订阅列表、选中订阅和分页状态（首屏 60 集，每次追加 150 集）。
+5. 点击可播放单集时，`player.playEpisode` 先做重播保护（同一集直接返回），再从 `progress.positionSecs` 续播（进度 >5 秒且未播完）并调用 `audioService.load()`；切集前先把上一集进度落库。
+6. 播放进度由前端节流保存（约 5 秒间隔），暂停、出错与播完时即时调用 `save_progress_command` 持久化。
 7. 单例 `<audio>` 事件回写 player 状态，驱动列表徽标和播放条。
 
 ## 关键规则与决策
@@ -67,7 +69,10 @@ cargo test
 - **WebView 内不要发生页面级导航**；show notes 链接用 `openExternal()` 交给系统浏览器。
 - **不要把 `HTMLAudioElement` 放进 Rematch state**；Rematch state 保持可序列化。
 - 播放器同一时间只有一个 current episode；选中、展开和播放语义沿用 M1。
+- **重复点击正在播放的单集不重新加载音频**（`playEpisode` 开头的同 id guard）；切换单集时先 flush 上一集进度。
 - **播放进度由前端驱动并落库**；通过 `save_progress_command` 写入 SQLite，Rematch state 保持可序列化。
+- **数据库文件 `rustcast.db` 位于可执行文件同目录**（便携式布局，非系统 app data 目录）；迁移按名字记录在 `schema_migrations` 表，新增迁移追加到 `db.rs` 的 `MIGRATIONS`。
+- **持久化引擎是 `turso` crate（本地模式），不是 rusqlite**；API 为 async（`db.rs` 全部函数是 async），迁移 SQL 与 SQLite 语法兼容。
 
 ## 版本陷阱记录
 
@@ -76,6 +81,7 @@ cargo test
 - Windows capability 的 opener scope 放在 `src-tauri/capabilities/default.json`。
 - Rust 侧注册 `tauri_plugin_opener::init()`，前端使用 `@tauri-apps/plugin-opener`。
 - CSP 必须显式允许 `img-src https:` 和 `media-src https:`，否则远程封面/音频会被 WebView 拦截。
+- turso 数据库在 `.setup()` 中用 `tauri::async_runtime::block_on(db::open_database())` 打开并 `app.manage()` 注入，所有 command 通过 `State<'_, Database>` 获取。
 
 ### Preact + Rematch
 
@@ -90,6 +96,7 @@ cargo test
 
 ## Git 工作流
 
-- 远程：`git@github.com:Lin-H/Rustcast.git`
+- 远程：`git@github.com:Lin-H/Rustcast.git`；默认分支 master，M2 功能分支为 `feat/m2-turso-local-db`。
 - 旧 iced/rodio 实现保存在历史分支/提交中，当前 Tauri 重构分支不应保留死代码。
-- 发布时打 tag 并推送；当前重构从 `0.2.0` 开始。
+- 发布时打 `v*` 标签并推送：CI 自动构建 Windows / Linux / macOS 三平台产物并发布 GitHub Release；含 `-alpha` / `-beta` / `-rc` 的标签自动标记为预发布。
+- 当前重构从 `0.2.0` 开始（对应 M2）。
