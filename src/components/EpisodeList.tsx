@@ -1,5 +1,6 @@
 import { EpisodeCard } from "./EpisodeCard";
 import { BrandIcon } from "./icons";
+import { useTranslator } from "../hooks/useTranslator";
 import { dispatch, useAppSelector } from "../store";
 import { PAGE_SIZE } from "../store/models/feed";
 import type { EpisodeDto } from "../types";
@@ -26,6 +27,7 @@ function pageWindow(current: number, total: number): number[] {
 }
 
 export function EpisodeList() {
+  const t = useTranslator();
   const feeds = useAppSelector((state) => state.feed.feeds);
   const selectedFeed = useAppSelector((state) => state.feed.selectedFeed);
   const loading = useAppSelector((state) => state.feed.loading);
@@ -50,7 +52,7 @@ export function EpisodeList() {
       <main class="flex h-full min-w-0 flex-1 items-center justify-center p-6">
         <div class="flex flex-col items-center gap-3">
           <BrandIcon className="h-12 w-12 animate-pulse text-accent" />
-          <p class="text-[13px] text-secondary">正在加载订阅…</p>
+          <p class="text-[13px] text-secondary">{t("loadingFeed")}</p>
         </div>
       </main>
     );
@@ -59,15 +61,15 @@ export function EpisodeList() {
   return (
     <main class="h-full min-w-0 flex-1 overflow-y-auto pt-4 pl-2 pr-5">
       <div class="mb-3 flex items-center">
-        <h2 class="truncate text-base font-bold text-primary">{summary?.title ?? "全部单集"}</h2>
+        <h2 class="truncate text-base font-bold text-primary">{summary?.title ?? t("allEpisodes")}</h2>
         <span class="ml-auto shrink-0 text-xs text-faint">
-          {loading ? "加载中…" : `${episodes.length} 集`}
+          {loading ? t("loadingShort") : `${episodes.length}${t("episodesCount")}`}
         </span>
       </div>
 
       {refreshError !== null && (
         <div class="mb-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
-          刷新失败：{refreshError}
+          {t("refreshFailed")}：{refreshError}
         </div>
       )}
 
@@ -90,8 +92,8 @@ export function EpisodeList() {
               disabled={safePage <= 1}
               class="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-[12px] text-secondary transition-colors hover:bg-card-hover hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
               onClick={() => dispatch.feed.setPage(safePage - 1)}
-              aria-label="上一页"
-              title="上一页"
+              aria-label={t("prevPage")}
+              title={t("prevPage")}
             >
               ‹
             </button>
@@ -111,7 +113,7 @@ export function EpisodeList() {
                       : "text-secondary hover:bg-card-hover hover:text-accent"
                   }`}
                   onClick={() => dispatch.feed.setPage(p)}
-                  aria-label={`第 ${p} 页`}
+                  aria-label={`${t("pageLabel")} ${p}`}
                   aria-current={p === safePage ? "page" : undefined}
                 >
                   {p}
@@ -124,26 +126,26 @@ export function EpisodeList() {
               disabled={safePage >= totalPages}
               class="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-[12px] text-secondary transition-colors hover:bg-card-hover hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
               onClick={() => dispatch.feed.setPage(safePage + 1)}
-              aria-label="下一页"
-              title="下一页"
+              aria-label={t("nextPage")}
+              title={t("nextPage")}
             >
               ›
             </button>
 
             <span class="ml-2 shrink-0 text-[11px] text-faint">
-              第 {safePage} / {totalPages} 页 · 共 {episodes.length} 集
+              {safePage} / {totalPages} {t("pageOf")} · {episodes.length} {t("episodesTotal")}
             </span>
           </div>
         )}
 
         {!loading && feeds.length === 0 && (
           <div class="py-10 text-center text-sm text-faint">
-            暂无订阅源，请在左侧添加 RSS / Atom 地址
+            {t("noFeedsPrompt")}
           </div>
         )}
 
         {!loading && feeds.length > 0 && episodes.length === 0 && (
-          <div class="py-10 text-center text-sm text-faint">没有可显示的单集</div>
+          <div class="py-10 text-center text-sm text-faint">{t("noEpisodes")}</div>
         )}
       </div>
     </main>

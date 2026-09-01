@@ -14,8 +14,48 @@
   --color-danger: #ff7373;
 }
 
-:root {
+/* 浅色主题：仅在 html.theme-light 下覆盖设计令牌 */
+html.theme-light {
+  --color-root: #f5f6f8;
+  --color-panel: #ffffff;
+  --color-card: #ffffff;
+  --color-card-hover: #eceef2;
+  --color-elevated: #f0f1f4;
+  --color-accent: #d98324;
+  --color-accent-dim: #b08949;
+  --color-primary: #1c2128;
+  --color-secondary: #4b5563;
+  --color-faint: #8a93a0;
+  --color-danger: #d64545;
+}
+
+/* 跟随系统：无手动类名时按媒体查询切浅色 */
+@media (prefers-color-scheme: light) {
+  html:not(.theme-light):not(.theme-dark) {
+    --color-root: #f5f6f8;
+    --color-panel: #ffffff;
+    --color-card: #ffffff;
+    --color-card-hover: #eceef2;
+    --color-elevated: #f0f1f4;
+    --color-accent: #d98324;
+    --color-accent-dim: #b08949;
+    --color-primary: #1c2128;
+    --color-secondary: #4b5563;
+    --color-faint: #8a93a0;
+    --color-danger: #d64545;
+  }
+}
+
+html.theme-light {
+  color-scheme: light;
+}
+
+:root,
+html.theme-dark {
   color-scheme: dark;
+}
+
+:root {
   font-family:
     "Segoe UI",
     "Microsoft YaHei UI",
