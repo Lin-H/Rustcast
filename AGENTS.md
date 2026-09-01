@@ -39,8 +39,11 @@ cargo test
 | `src/components/` | 顶栏、订阅源侧栏、单集列表/卡片、播放条 |
 | `src/services/audio.ts` | 单例 `HTMLAudioElement`，唯一音频控制入口 |
 | `src/services/tauri.ts` | Tauri IPC 与系统浏览器外链 |
-| `src/store/` | Rematch store；`feed` 和 `player` 两个模型 |
+| `src/store/` | Rematch store；`feed`、`player`、`settings` 三个模型 |
 | `src/lib/sanitize.ts` | DOMPurify 白名单净化 show notes |
+| `src/lib/i18n.ts` | zh/en 文案字典与翻译函数 |
+| `src/hooks/useTranslator.ts` | 组件内取文案 hook |
+| `src/index.css` | Tailwind v4、深浅双套设计令牌 |
 | `src/index.css` | Tailwind v4 与深色琥珀设计令牌 |
 | `src-tauri/src/main.rs` | Tauri builder、turso 数据库注入、asset scope 注册与全部 11 个 command |
 | `src-tauri/src/feed.rs` | RSS 抓取、解析、DTO、URL 规范化 |
@@ -48,8 +51,9 @@ cargo test
 | `src-tauri/src/artwork.rs` | ArtworkState 注入与 cache_artwork command |
 | `src-tauri/src/db.rs` | turso 迁移与订阅、单集、播放进度读写 |
 | `src-tauri/capabilities/` | WebView capability 和 opener 限制 |
-| `src-tauri/tauri.conf.json` | 窗口、CSP、dev/build 流程与打包配置 |
+| `src-tauri/tauri.conf.json` | 窗口、CSP、asset 协议与打包配置 |
 | `.github/workflows/build.yml` | `v*` 标签触发的三平台构建与 GitHub Release 发布 |
+| `.github/workflows/platform-check.yml` | 手动触发的三平台构建验证（仅 artifact，不发布） |
 
 ## 数据流
 
@@ -63,6 +67,7 @@ cargo test
 8. 封面由 `Artwork` 组件请求 `cache_artwork_command`：命中则用 `convertFileSrc` 走 asset 协议加载本地文件，未命中时 Rust 下载入 `artwork-cache/`；失败回落远程 URL。
 9. OPML 导入/导出经 `import_opml_command` / `export_opml_command`：Rust 用系统对话框选路径，quick-xml 解析/渲染，逐条复用 add_feed 去重。
 10. 倍速（0.75–2x 循环）与音量保存在 localStorage，启动时应用到 audio 元素（音量经平方曲线映射为感知标度）。
+11. 主题（system/light/dark）与语言（zh/en）由 settings 模型管理：写入 localStorage 并同步 `html` class（`theme-light` / `theme-dark`），system 模式监听 `prefers-color-scheme` 变化；文案统一从 `lib/i18n.ts` 字典取。
 
 ## 关键规则与决策
 
@@ -82,6 +87,8 @@ cargo test
 - **tauri crate 必须开 `protocol-asset` feature** 才有 `app.asset_protocol_scope()`。
 - **OPML 解析用 quick-xml 0.42**：`local_name()` 返回 `LocalName`（内部 `&str`），属性解码用 `normalized_value(XmlVersion::Implicit1_0)`。
 - **快进/快退走 `audioService.skip(±15)`**，夹在 `[0, duration]`；倍速重连后由 `resetSource` 重新应用。
+- **主题切换只改 `html` class 与 CSS 变量**：浅色令牌在 `index.css` 的 `html.theme-light` 选择器下整组覆盖，`prefers-color-scheme: light` 媒体查询处理 system 模式；新增颜色令牌时两套都要维护。
+- **UI 文案不硬编码**：新增文案先加进 `lib/i18n.ts` 的 zh/en 字典，组件里用 `useTranslator()` 取；Rust 侧错误消息仍为中文（服务端语义）。
 
 ## 版本陷阱记录
 
