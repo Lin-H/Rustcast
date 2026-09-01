@@ -1,5 +1,7 @@
 import { Artwork } from "./Artwork";
 import { ShowNotes } from "./ShowNotes";
+import { useTranslator } from "../hooks/useTranslator";
+import { useAppSelector } from "../store";
 import { formatDate, formatTime } from "../lib/format";
 import type { EpisodeDto } from "../types";
 
@@ -18,6 +20,8 @@ export function EpisodeCard({
   isPlaying,
   onPlay,
 }: EpisodeCardProps) {
+  const t = useTranslator();
+  const language = useAppSelector((state) => state.settings.language);
   const disabled = episode.audioUrl === null;
   const progress = episode.progress;
   const progressPercent =
@@ -37,7 +41,7 @@ export function EpisodeCard({
             ? "cursor-not-allowed border border-transparent bg-card opacity-70"
             : "cursor-pointer border border-transparent bg-card hover:bg-card-hover active:bg-elevated"
       }`}
-      title={disabled ? "该单集没有可播放的音频" : undefined}
+      title={disabled ? t("noAudioTitle") : undefined}
     >
       <div class="flex items-center gap-3.5">
         <Artwork
@@ -54,11 +58,11 @@ export function EpisodeCard({
             {episode.title}
           </h3>
           <div class="mt-1 flex gap-1.5 text-[11.5px] text-faint">
-            <span>{formatDate(episode.publishedTs)}</span>
+            <span>{formatDate(episode.publishedTs, language)}</span>
             <span>·</span>
             <span class="text-secondary">
               {episode.durationSecs === null
-                ? "时长未知"
+                ? t("durationUnknown")
                 : formatTime(episode.durationSecs)}
             </span>
           </div>
@@ -76,12 +80,16 @@ export function EpisodeCard({
                     />
                   </div>
                   <span class="shrink-0 text-[10.5px] text-faint">
-                    {progress.completed ? "已播完" : `已播 ${Math.round(progressPercent)}%`}
+                    {progress.completed
+                ? t("finishedBadge")
+                : `${t("playedPercent")} ${Math.round(progressPercent)}%`}
                   </span>
                 </>
               ) : (
                 <span class="text-[10.5px] text-faint">
-                  {progress.completed ? "已播完" : `上次听到 ${formatTime(progress.positionSecs)}`}
+                  {progress.completed
+                    ? t("finishedBadge")
+                    : `${t("lastPlayedAt")} ${formatTime(progress.positionSecs)}`}
                 </span>
               )}
             </div>
@@ -102,7 +110,7 @@ export function EpisodeCard({
                 : "border-accent-dim bg-accent/8 text-accent"
           }`}
         >
-          {disabled ? "无法播放" : isPlaying ? "播放中" : "已暂停"}
+          {disabled ? t("badgeUnplayable") : isPlaying ? t("badgePlaying") : t("badgePaused")}
         </span>
       </div>
     </button>

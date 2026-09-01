@@ -21,6 +21,14 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    // system 主题模式下跟随操作系统深浅切换。
+    const media = window.matchMedia("(prefers-color-scheme: light)");
+    const listener = () => dispatch.settings.syncSystemTheme();
+    media.addEventListener("change", listener);
+    return () => media.removeEventListener("change", listener);
+  }, []);
+
+  useEffect(() => {
     return bindAudioEvents({
       onPlaying: () => dispatch.player.playing(),
       onPause: () => {

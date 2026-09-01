@@ -1,0 +1,109 @@
+name: Platform build check
+
+# M4 平台验证：手动触发三平台构建，产物仅上传 artifact 供下载验证，不发布 Release。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            artifact_name: rustcast-linux
+          - os: macos-latest
+            platform: macos
+            artifact_name: rustcast-macos
+          - os: windows-latest
+            platform: windows
+            artifact_name: rustcast-windows
+
+    env:
+      TAG_NAME: platform-check
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: true
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Build app
+        env:
+          CI: true
+        run: pnpm tauri build
+
+      - name: Rename and collect artifacts
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          case "${{ matrix.platform }}" in
+            windows)
+              find src-tauri/target/release/bundle -type f \( \
+                -iname "*.exe" -o -iname "*.msi" -o -iname "*.zip" \) -exec bash -c '
+                  for file do
+                    cp "$file" "release-assets/${{ matrix.platform }}-$(basename "$file")"
+                  done
+                ' bash {} +
+              ;;
+            linux)
+              find src-tauri/target/release/bundle -type f \( \
+                -iname "*.AppImage" -o -iname "*.deb" -o -iname "*.tar.gz" \) -exec bash -c '
+                  for file do
+                    cp "$file" "release-assets/${{ matrix.platform }}-$(basename "$file")"
+                  done
+                ' bash {} +
+              ;;
+            macos)
+              find src-tauri/target/release/bundle -type f \( \
+                -iname "*.dmg" -o -iname "*.tar.gz" -o -iname "*.app.tar.gz" \) -exec bash -c '
+                  for file do
+                    cp "$file" "release-assets/${{ matrix.platform }}-$(basename "$file")"
+                  done
+                ' bash {} +
+              ;;
+          esac
+          ls -la release-assets
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: release-assets/*
+          if-no-files-found: error

@@ -5,11 +5,13 @@ import type { RootModel } from "./models";
 export type { RootModel };
 import { feedModel } from "./models/feed";
 import { playerModel } from "./models/player";
+import { settingsModel } from "./models/settings";
 
 export const store = init<RootModel>({
   models: {
     feed: feedModel,
     player: playerModel,
+    settings: settingsModel,
   },
 });
 

@@ -11,15 +11,12 @@ export function formatTime(totalSeconds: number): string {
   return `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
-export function formatDate(timestampSeconds: number): string {
-  if (!Number.isFinite(timestampSeconds) || timestampSeconds <= 0) {
-    return "日期未知";
-  }
-
-  const date = new Date(timestampSeconds * 1000);
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
+export function formatDate(
+  timestampSeconds: number,
+  language: "zh" | "en" = "zh",
+): string {
+  const locale = language === "zh" ? "zh-CN" : "en-US";
+  const invalid = !Number.isFinite(timestampSeconds) || timestampSeconds <= 0;
+  const date = new Date(invalid ? 0 : timestampSeconds * 1000);
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(date);
 }

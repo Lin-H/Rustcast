@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { useTranslator } from "../hooks/useTranslator";
 import { cacheArtwork } from "../services/tauri";
 
 interface ArtworkProps {
@@ -68,6 +69,7 @@ export function Artwork({
   className = "h-14 w-14 rounded-lg",
   placeholderClassName = "text-sm",
 }: ArtworkProps) {
+  const t = useTranslator();
   const [primaryFailed, setPrimaryFailed] = useState(false);
   const [fallbackFailed, setFallbackFailed] = useState(false);
   const resolved = useResolvedSource(src);
@@ -91,7 +93,9 @@ export function Artwork({
         className={`flex shrink-0 items-center justify-center bg-card text-secondary ${className}`}
         aria-label={alt}
       >
-        <span className={placeholderClassName}>{alt.slice(0, 1) || "播"}</span>
+        <span className={placeholderClassName}>
+          {alt.slice(0, 1) || t("artworkPlaceholder")}
+        </span>
       </div>
     );
   }

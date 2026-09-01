@@ -7,11 +7,13 @@ import {
   SpeedometerIcon,
   VolumeIcon,
 } from "./icons";
+import { useTranslator } from "../hooks/useTranslator";
 import { formatTime } from "../lib/format";
 import { PLAYBACK_RATES } from "../services/audio";
 import { dispatch, useAppSelector } from "../store";
 
 export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
+  const t = useTranslator();
   const episode = useAppSelector((state) => state.player.episode);
   const isPlaying = useAppSelector((state) => state.player.isPlaying);
   const buffering = useAppSelector((state) => state.player.buffering);
@@ -28,7 +30,7 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
   if (episode === null) {
     return (
       <footer class="shrink-0 bg-panel px-[26px] py-4">
-        <p class="text-[12.5px] text-faint">在上方选择一集，即可开始流式收听</p>
+        <p class="text-[12.5px] text-faint">{t("playerPickHint")}</p>
       </footer>
     );
   }
@@ -39,14 +41,14 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
     ? Math.min(scrubValue, progressMax)
     : Math.min(currentTime, progressMax);
   const statusText = recovering
-    ? "网络恢复中…"
+    ? t("statusRecovering")
     : buffering
-      ? "缓冲中…"
+      ? t("statusBuffering")
     : finished
-      ? "已播完"
+      ? t("statusFinished")
       : isPlaying
-        ? "正在播放"
-        : "已暂停";
+        ? t("statusPlaying")
+        : t("statusPaused");
 
   const commitScrub = () => {
     const target = scrubValue;
@@ -92,7 +94,7 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
             max={progressMax}
             step={1}
             value={progressValue}
-            aria-label="播放进度"
+            aria-label={t("progressLabel")}
             onInput={(event) => {
               if (!scrubbing) {
                 dispatch.player.scrubStarted();
@@ -113,8 +115,8 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
           type="button"
           class="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-secondary transition-colors hover:bg-card-hover hover:text-accent"
           onClick={() => dispatch.player.skip(-15)}
-          aria-label="快退 15 秒"
-          title="快退 15 秒"
+          aria-label={t("back15")}
+          title={t("back15")}
         >
           <Back15Icon className="h-[18px] w-[18px]" />
         </button>
@@ -123,7 +125,7 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
           type="button"
           class="grid h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-full bg-accent text-root shadow-[0_2px_14px_rgba(255,180,84,0.22)] transition-transform hover:scale-105 active:scale-95"
           onClick={() => dispatch.player.toggle()}
-          aria-label={isPlaying ? "暂停" : "播放"}
+          aria-label={isPlaying ? t("togglePause") : t("togglePlay")}
         >
           {isPlaying ? <PauseIcon /> : <PlayIcon />}
         </button>
@@ -132,8 +134,8 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
           type="button"
           class="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-secondary transition-colors hover:bg-card-hover hover:text-accent"
           onClick={() => dispatch.player.skip(15)}
-          aria-label="快进 15 秒"
-          title="快进 15 秒"
+          aria-label={t("forward15")}
+          title={t("forward15")}
         >
           <Forward15Icon className="h-[18px] w-[18px]" />
         </button>
@@ -142,8 +144,8 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
           type="button"
           class="h-8 shrink-0 cursor-pointer rounded-lg px-2 text-[12px] font-bold text-secondary transition-colors hover:bg-card-hover hover:text-accent"
           onClick={cycleRate}
-          aria-label="切换倍速"
-          title={`播放倍速：${playbackRate}x（点击切换）`}
+          aria-label={t("speedToggle")}
+          title={`${t("speedLabel")}: ${playbackRate}x`}
         >
           {playbackRate === 1 ? <SpeedometerIcon className="h-[18px] w-[18px]" /> : `${playbackRate}x`}
         </button>
@@ -156,7 +158,7 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
             max={1}
             step={0.01}
             value={volume}
-            aria-label="音量"
+            aria-label={t("volumeLabel")}
             class="w-[112px]"
             onInput={(event) => {
               const nextVolume = Number(event.currentTarget.value);
