@@ -1,8 +1,8 @@
 # Rustcast
 
-一款使用 **Tauri 2 + Preact + Tailwind CSS** 构建的轻量 RSS 播客阅读器。M3 播客体验增强已完成：倍速播放、±15 秒快进快退、OPML 导入导出、封面磁盘缓存与音量对数标度，并保留 M2 的多订阅源管理、SQLite 持久化与续播记忆。
+一款使用 **Tauri 2 + Preact + Tailwind CSS** 构建的轻量 RSS 播客阅读器。M4 平台化已完成：深浅主题切换与中英双语，三平台（Windows/Linux/macOS）构建均经 CI 验证；并保留 M2/M3 的多订阅源管理、SQLite 持久化、续播记忆、倍速、±15 秒、OPML、封面缓存与感知音量。
 
-![status](https://img.shields.io/badge/version-0.3.0-blue) ![milestone](https://img.shields.io/badge/milestone-M3%20done-brightgreen)
+![status](https://img.shields.io/badge/version-0.4.0-blue) ![milestone](https://img.shields.io/badge/milestone-M4%20done-brightgreen)
 
 ## ✨ 功能特性（M1）
 
@@ -135,7 +135,7 @@ src-tauri/
 - 进度 seek 依赖 WebView 的媒体 Range 请求实现。
 - 倍速超过 2x 时部分 CDN 的音频时间戳会漂移；WebView 实现差异无法完全规避。
 - 封面缓存目录 `artwork-cache/` 无自动清理，长期使用后可手动删除。
-- Windows 是当前主要验证平台；Linux/macOS 由 CI 发布构建覆盖，本地验证留待 M4。
+- Windows 是主要开发平台；Linux/macOS 构建产物已通过 CI 验证，运行时行为仍以用户反馈为准。
 
 ## 🗺️ Roadmap
 
@@ -154,7 +154,7 @@ src-tauri/
 - [x] 封面磁盘缓存与懒加载
 - [x] 音量对数标度
 
-### M4 — 平台化
+### M4 — 平台化 ✅ 已完成（v0.4.0）
 
-- [ ] Linux/macOS 构建验证（`platform-check` workflow 手动触发验证中）
+- [x] Linux/macOS 构建验证（`platform-check` workflow 三平台全绿）
 - [x] 深浅主题切换与多语言

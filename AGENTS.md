@@ -5,9 +5,9 @@
 ## 项目概览
 
 - **名称**：Rustcast — Tauri + Preact 的 RSS 播客阅读器
-- **当前里程碑**：M3 已完成（v0.3.0），倍速播放、±15 秒快进快退、OPML 导入导出、封面磁盘缓存与音量对数标度；下一步 M4 平台化
-- **当前分支**：`feat/m2-turso-local-db`（M2/M3 功能分支，待合并 master）
-- **主要平台**：Windows；Linux/macOS 由 CI 发布构建覆盖，本地验证留待 M4
+- **当前里程碑**：M4 已完成（v0.4.0），深浅主题切换、中英双语与三平台 CI 构建验证；全部四个里程碑完成
+- **当前分支**：`feat/m2-turso-local-db`（M2–M4 功能分支，待合并 master）
+- **主要平台**：Windows 主开发；Linux/macOS 构建已由 `platform-check` workflow 验证
 - **UI 语言**：中文；代码注释保持最少必要
 
 ## 构建与验证命令
@@ -115,4 +115,4 @@ cargo test
 - 远程：`git@github.com:Lin-H/Rustcast.git`；默认分支 master，M2 功能分支为 `feat/m2-turso-local-db`。
 - 旧 iced/rodio 实现保存在历史分支/提交中，当前 Tauri 重构分支不应保留死代码。
 - 发布时打 `v*` 标签并推送：CI 自动构建 Windows / Linux / macOS 三平台产物并发布 GitHub Release；含 `-alpha` / `-beta` / `-rc` 的标签自动标记为预发布。
-- 当前重构从 `0.2.0` 开始（M2）；M3 对应 `0.3.0`。
+- 当前重构从 `0.2.0` 开始（M2）；M3 对应 `0.3.0`，M4 对应 `0.4.0`。

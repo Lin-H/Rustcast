@@ -1,6 +1,6 @@
 [package]
 name = "rustcast"
-version = "0.3.0"
+version = "0.4.0"
 description = "Rustcast RSS audio player"
 authors = ["Lin-H"]
 edition = "2024"
