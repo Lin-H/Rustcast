@@ -13,10 +13,38 @@ export interface PlayerState {
   currentTime: number;
   duration: number;
   volume: number;
+  playbackRate: number;
   error: string | null;
   scrubbing: boolean;
   scrubValue: number;
 }
+
+const PLAYBACK_RATE_KEY = "rustcast.playbackRate";
+const VOLUME_KEY = "rustcast.volume";
+
+function readStoredNumber(key: string, fallback: number): number {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (raw === null) {
+      return fallback;
+    }
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function storeNumber(key: string, value: number): void {
+  try {
+    window.localStorage.setItem(key, String(value));
+  } catch {
+    // localStorage 不可用时静默降级。
+  }
+}
+
+const initialVolume = Math.min(Math.max(readStoredNumber(VOLUME_KEY, 1), 0), 1);
+const initialPlaybackRate = Math.min(Math.max(readStoredNumber(PLAYBACK_RATE_KEY, 1), 0.25), 4);
 
 const initialState: PlayerState = {
   episode: null,
@@ -26,7 +54,8 @@ const initialState: PlayerState = {
   finished: false,
   currentTime: 0,
   duration: 0,
-  volume: 1,
+  volume: initialVolume,
+  playbackRate: initialPlaybackRate,
   error: null,
   scrubbing: false,
   scrubValue: 0,
@@ -126,6 +155,9 @@ export const playerModel = createModel<RootModel>()({
     volumeSet(state, volume: number): PlayerState {
       return { ...state, volume };
     },
+    rateSet(state, rate: number): PlayerState {
+      return { ...state, playbackRate: rate };
+    },
     errorRaised(state, error: string): PlayerState {
       return {
         ...state,
@@ -212,8 +244,17 @@ export const playerModel = createModel<RootModel>()({
     seek(seconds: number): void {
       audioPlayer.seek(seconds);
     },
+    skip(deltaSeconds: number): void {
+      audioPlayer.skip(deltaSeconds);
+      dispatch.player.timeUpdated(audioPlayer.getCurrentTime());
+    },
     setVolume(volume: number): void {
       audioPlayer.setVolume(volume);
+      storeNumber(VOLUME_KEY, volume);
+    },
+    setPlaybackRate(rate: number): void {
+      audioPlayer.setPlaybackRate(rate);
+      storeNumber(PLAYBACK_RATE_KEY, rate);
     },
     scheduleProgressSave(seconds: number): void {
       if (completedSaved) {

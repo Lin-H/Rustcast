@@ -4,13 +4,20 @@ import { Sidebar } from "./components/Sidebar";
 import { EpisodeList } from "./components/EpisodeList";
 import { PlayerBar } from "./components/PlayerBar";
 import { bindAudioEvents } from "./services/audio";
-import { dispatch, useAppSelector } from "./store";
+import { dispatch, store, useAppSelector } from "./store";
 
 export function App() {
   const selectedFeed = useAppSelector((state) => state.feed.selectedFeed);
 
   useEffect(() => {
     void dispatch.feed.load();
+  }, []);
+
+  useEffect(() => {
+    // 启动时应用持久化的音量与倍速。
+    const { volume, playbackRate } = store.getState().player;
+    dispatch.player.setVolume(volume);
+    dispatch.player.setPlaybackRate(playbackRate);
   }, []);
 
   useEffect(() => {

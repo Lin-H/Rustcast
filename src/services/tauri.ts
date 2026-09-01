@@ -5,6 +5,7 @@ import type {
   AppStateDto,
   FeedDetailDto,
   FeedSummaryDto,
+  ImportOpmlResult,
   RefreshFeedResult,
   SaveProgressInput,
 } from "../types";
@@ -39,6 +40,18 @@ export async function deleteFeed(feedId: string): Promise<void> {
 
 export async function saveProgress(input: SaveProgressInput): Promise<void> {
   return invoke<void>("save_progress_command", { input });
+}
+
+export async function importOpml(): Promise<ImportOpmlResult> {
+  return invoke<ImportOpmlResult>("import_opml_command");
+}
+
+export async function exportOpml(): Promise<string | null> {
+  return invoke<string | null>("export_opml_command");
+}
+
+export async function cacheArtwork(url: string): Promise<string | null> {
+  return invoke<string | null>("cache_artwork_command", { url });
 }
 
 export async function openExternal(rawUrl: string): Promise<boolean> {

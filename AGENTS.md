@@ -5,8 +5,8 @@
 ## 项目概览
 
 - **名称**：Rustcast — Tauri + Preact 的 RSS 播客阅读器
-- **当前里程碑**：M2 已完成（v0.2.0），多订阅源 + SQLite 持久化 + 播放进度记忆；下一步 M3 播客体验增强
-- **当前分支**：`feat/m2-turso-local-db`（M2 功能分支，待合并 master）
+- **当前里程碑**：M3 已完成（v0.3.0），倍速播放、±15 秒快进快退、OPML 导入导出、封面磁盘缓存与音量对数标度；下一步 M4 平台化
+- **当前分支**：`feat/m2-turso-local-db`（M2/M3 功能分支，待合并 master）
 - **主要平台**：Windows；Linux/macOS 由 CI 发布构建覆盖，本地验证留待 M4
 - **UI 语言**：中文；代码注释保持最少必要
 
@@ -42,8 +42,10 @@ cargo test
 | `src/store/` | Rematch store；`feed` 和 `player` 两个模型 |
 | `src/lib/sanitize.ts` | DOMPurify 白名单净化 show notes |
 | `src/index.css` | Tailwind v4 与深色琥珀设计令牌 |
-| `src-tauri/src/main.rs` | Tauri builder、turso 数据库注入与全部 8 个 command 注册 |
+| `src-tauri/src/main.rs` | Tauri builder、turso 数据库注入、asset scope 注册与全部 11 个 command |
 | `src-tauri/src/feed.rs` | RSS 抓取、解析、DTO、URL 规范化 |
+| `src-tauri/src/opml.rs` | OPML 解析/渲染与封面磁盘缓存实现（含单元测试） |
+| `src-tauri/src/artwork.rs` | ArtworkState 注入与 cache_artwork command |
 | `src-tauri/src/db.rs` | turso 迁移与订阅、单集、播放进度读写 |
 | `src-tauri/capabilities/` | WebView capability 和 opener 限制 |
 | `src-tauri/tauri.conf.json` | 窗口、CSP、dev/build 流程与打包配置 |
@@ -58,6 +60,9 @@ cargo test
 5. 点击可播放单集时，`player.playEpisode` 先做重播保护（同一集直接返回），再从 `progress.positionSecs` 续播（进度 >5 秒且未播完）并调用 `audioService.load()`；切集前先把上一集进度落库。
 6. 播放进度由前端节流保存（约 5 秒间隔），暂停、出错与播完时即时调用 `save_progress_command` 持久化。
 7. 单例 `<audio>` 事件回写 player 状态，驱动列表徽标和播放条。
+8. 封面由 `Artwork` 组件请求 `cache_artwork_command`：命中则用 `convertFileSrc` 走 asset 协议加载本地文件，未命中时 Rust 下载入 `artwork-cache/`；失败回落远程 URL。
+9. OPML 导入/导出经 `import_opml_command` / `export_opml_command`：Rust 用系统对话框选路径，quick-xml 解析/渲染，逐条复用 add_feed 去重。
+10. 倍速（0.75–2x 循环）与音量保存在 localStorage，启动时应用到 audio 元素（音量经平方曲线映射为感知标度）。
 
 ## 关键规则与决策
 
@@ -73,13 +78,17 @@ cargo test
 - **播放进度由前端驱动并落库**；通过 `save_progress_command` 写入 SQLite，Rematch state 保持可序列化。
 - **数据库文件 `rustcast.db` 位于可执行文件同目录**（便携式布局，非系统 app data 目录）；迁移按名字记录在 `schema_migrations` 表，新增迁移追加到 `db.rs` 的 `MIGRATIONS`。
 - **持久化引擎是 `turso` crate（本地模式），不是 rusqlite**；API 为 async（`db.rs` 全部函数是 async），迁移 SQL 与 SQLite 语法兼容。
+- **封面缓存目录 `artwork-cache/` 必须同时进入 asset protocol scope**（启动时 `allow_directory`）且 CSP `img-src` 允许 `asset: http://asset.localhost`，否则 WebView 拒绝加载。
+- **tauri crate 必须开 `protocol-asset` feature** 才有 `app.asset_protocol_scope()`。
+- **OPML 解析用 quick-xml 0.42**：`local_name()` 返回 `LocalName`（内部 `&str`），属性解码用 `normalized_value(XmlVersion::Implicit1_0)`。
+- **快进/快退走 `audioService.skip(±15)`**，夹在 `[0, duration]`；倍速重连后由 `resetSource` 重新应用。
 
 ## 版本陷阱记录
 
 ### Tauri 2
 
-- Windows capability 的 opener scope 放在 `src-tauri/capabilities/default.json`。
-- Rust 侧注册 `tauri_plugin_opener::init()`，前端使用 `@tauri-apps/plugin-opener`。
+- Windows capability 的 opener scope 放在 `src-tauri/capabilities/default.json`，dialog 权限需 `dialog:allow-open` / `dialog:allow-save`。
+- Rust 侧注册 `tauri_plugin_dialog::init()` 与 `tauri_plugin_opener::init()`；OPML 命令在 Rust 内部调用 `blocking_pick_file` / `blocking_save_file`（async command 中不阻塞主线程）。
 - CSP 必须显式允许 `img-src https:` 和 `media-src https:`，否则远程封面/音频会被 WebView 拦截。
 - turso 数据库在 `.setup()` 中用 `tauri::async_runtime::block_on(db::open_database())` 打开并 `app.manage()` 注入，所有 command 通过 `State<'_, Database>` 获取。
 
@@ -99,4 +108,4 @@ cargo test
 - 远程：`git@github.com:Lin-H/Rustcast.git`；默认分支 master，M2 功能分支为 `feat/m2-turso-local-db`。
 - 旧 iced/rodio 实现保存在历史分支/提交中，当前 Tauri 重构分支不应保留死代码。
 - 发布时打 `v*` 标签并推送：CI 自动构建 Windows / Linux / macOS 三平台产物并发布 GitHub Release；含 `-alpha` / `-beta` / `-rc` 的标签自动标记为预发布。
-- 当前重构从 `0.2.0` 开始（对应 M2）。
+- 当前重构从 `0.2.0` 开始（M2）；M3 对应 `0.3.0`。

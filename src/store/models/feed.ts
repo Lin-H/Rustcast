@@ -2,12 +2,20 @@ import { createModel } from "@rematch/core";
 import {
   addFeed as addFeedRequest,
   deleteFeed as deleteFeedRequest,
+  exportOpml as exportOpmlRequest,
+  importOpml as importOpmlRequest,
   loadFeed as loadFeedRequest,
   loadInitialState,
   refreshFeed as refreshFeedRequest,
   setSelectedFeed,
 } from "../../services/tauri";
-import type { AddFeedResult, AppStateDto, FeedDetailDto, FeedSummaryDto } from "../../types";
+import type {
+  AddFeedResult,
+  AppStateDto,
+  FeedDetailDto,
+  FeedSummaryDto,
+  ImportOpmlResult,
+} from "../../types";
 import { store } from "../index";
 import type { RootModel } from "../index";
 
@@ -22,6 +30,8 @@ export interface FeedState {
   addError: string | null;
   refreshingFeedId: string | null;
   refreshError: string | null;
+  opmlBusy: boolean;
+  opmlError: string | null;
 }
 
 const initialState: FeedState = {
@@ -35,6 +45,8 @@ const initialState: FeedState = {
   addError: null,
   refreshingFeedId: null,
   refreshError: null,
+  opmlBusy: false,
+  opmlError: null,
 };
 
 export const feedModel = createModel<RootModel>()({
@@ -98,6 +110,15 @@ export const feedModel = createModel<RootModel>()({
     },
     refreshStarted(state, feedId: string): FeedState {
       return { ...state, refreshingFeedId: feedId, refreshError: null };
+    },
+    opmlStarted(state): FeedState {
+      return { ...state, opmlBusy: true, opmlError: null };
+    },
+    opmlFinished(state): FeedState {
+      return { ...state, opmlBusy: false };
+    },
+    opmlFailed(state, error: string): FeedState {
+      return { ...state, opmlBusy: false, opmlError: error };
     },
     refreshFinished(
       state,
@@ -199,6 +220,33 @@ export const feedModel = createModel<RootModel>()({
         }
       } catch (error) {
         dispatch.feed.setError(error instanceof Error ? error.message : String(error));
+      }
+    },
+    async importOpml(): Promise<ImportOpmlResult | null> {
+      dispatch.feed.opmlStarted();
+      try {
+        const result = await importOpmlRequest();
+        if (result.imported > 0) {
+          // 重新拉取订阅列表并选中原选中项（或第一个）。
+          const appState = await loadInitialState();
+          dispatch.feed.setInitial(appState);
+        }
+        dispatch.feed.opmlFinished();
+        return result;
+      } catch (error) {
+        dispatch.feed.opmlFailed(error instanceof Error ? error.message : String(error));
+        return null;
+      }
+    },
+    async exportOpml(): Promise<string | null> {
+      dispatch.feed.opmlStarted();
+      try {
+        const path = await exportOpmlRequest();
+        dispatch.feed.opmlFinished();
+        return path;
+      } catch (error) {
+        dispatch.feed.opmlFailed(error instanceof Error ? error.message : String(error));
+        return null;
       }
     },
   }),

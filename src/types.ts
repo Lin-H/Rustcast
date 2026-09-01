@@ -57,3 +57,9 @@ export interface SaveProgressInput {
   durationSecs: number | null;
   completed: boolean;
 }
+
+export interface ImportOpmlResult {
+  imported: number;
+  skipped: number;
+  failed: Array<{ url: string; error: string }>;
+}

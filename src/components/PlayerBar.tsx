@@ -1,6 +1,14 @@
 import { Artwork } from "./Artwork";
-import { PauseIcon, PlayIcon, VolumeIcon } from "./icons";
+import {
+  Back15Icon,
+  Forward15Icon,
+  PauseIcon,
+  PlayIcon,
+  SpeedometerIcon,
+  VolumeIcon,
+} from "./icons";
 import { formatTime } from "../lib/format";
+import { PLAYBACK_RATES } from "../services/audio";
 import { dispatch, useAppSelector } from "../store";
 
 export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
@@ -12,6 +20,7 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
   const currentTime = useAppSelector((state) => state.player.currentTime);
   const duration = useAppSelector((state) => state.player.duration);
   const volume = useAppSelector((state) => state.player.volume);
+  const playbackRate = useAppSelector((state) => state.player.playbackRate);
   const error = useAppSelector((state) => state.player.error);
   const scrubbing = useAppSelector((state) => state.player.scrubbing);
   const scrubValue = useAppSelector((state) => state.player.scrubValue);
@@ -43,6 +52,16 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
     const target = scrubValue;
     dispatch.player.scrubCommitted();
     dispatch.player.seek(target);
+  };
+
+  const cycleRate = () => {
+    const index = PLAYBACK_RATES.findIndex((rate) => rate === playbackRate);
+    const fallbackIndex = PLAYBACK_RATES.indexOf(1);
+    const currentIndex = index >= 0 ? index : fallbackIndex;
+    const nextIndex = (currentIndex + 1) % PLAYBACK_RATES.length;
+    const next = PLAYBACK_RATES[nextIndex] ?? 1;
+    dispatch.player.rateSet(next);
+    dispatch.player.setPlaybackRate(next);
   };
 
   return (
@@ -92,11 +111,41 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
 
         <button
           type="button"
+          class="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-secondary transition-colors hover:bg-card-hover hover:text-accent"
+          onClick={() => dispatch.player.skip(-15)}
+          aria-label="快退 15 秒"
+          title="快退 15 秒"
+        >
+          <Back15Icon className="h-[18px] w-[18px]" />
+        </button>
+
+        <button
+          type="button"
           class="grid h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-full bg-accent text-root shadow-[0_2px_14px_rgba(255,180,84,0.22)] transition-transform hover:scale-105 active:scale-95"
           onClick={() => dispatch.player.toggle()}
           aria-label={isPlaying ? "暂停" : "播放"}
         >
           {isPlaying ? <PauseIcon /> : <PlayIcon />}
+        </button>
+
+        <button
+          type="button"
+          class="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-secondary transition-colors hover:bg-card-hover hover:text-accent"
+          onClick={() => dispatch.player.skip(15)}
+          aria-label="快进 15 秒"
+          title="快进 15 秒"
+        >
+          <Forward15Icon className="h-[18px] w-[18px]" />
+        </button>
+
+        <button
+          type="button"
+          class="h-8 shrink-0 cursor-pointer rounded-lg px-2 text-[12px] font-bold text-secondary transition-colors hover:bg-card-hover hover:text-accent"
+          onClick={cycleRate}
+          aria-label="切换倍速"
+          title={`播放倍速：${playbackRate}x（点击切换）`}
+        >
+          {playbackRate === 1 ? <SpeedometerIcon className="h-[18px] w-[18px]" /> : `${playbackRate}x`}
         </button>
 
         <div class="flex w-[150px] shrink-0 items-center gap-2">

@@ -12,6 +12,8 @@ export interface AudioEventHandlers {
 const audio = new Audio();
 audio.preload = "auto";
 
+export const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 1.75, 2] as const;
+
 const MAX_RECOVERY_ATTEMPTS = 8;
 const STALL_TIMEOUT_MS = 8_000;
 const MAX_RECOVERY_DELAY_MS = 8_000;
@@ -27,6 +29,8 @@ let loadToken = 0;
 let stallTimer: number | null = null;
 let recoveryDelayTimer: number | null = null;
 let eventHandlers: AudioEventHandlers | null = null;
+let playbackRate = 1;
+let volume = 1;
 
 function clearTimer(timer: number | null): void {
   if (timer !== null) {
@@ -100,6 +104,8 @@ function resetSource(url: string, resumeSeconds: number): void {
   pendingResumeSeconds = resumeSeconds;
   audio.pause();
   audio.src = url;
+  audio.playbackRate = playbackRate;
+  audio.volume = volume * volume;
   audio.load();
 
   if (resumeSeconds > 0) {
@@ -292,6 +298,9 @@ export const audioPlayer = {
   isPaused(): boolean {
     return audio.paused;
   },
+  getCurrentTime(): number {
+    return audio.currentTime;
+  },
   seek(seconds: number): void {
     if (Number.isFinite(audio.duration)) {
       audio.currentTime = Math.min(Math.max(seconds, 0), audio.duration);
@@ -299,7 +308,20 @@ export const audioPlayer = {
       lastStallCheckSeconds = audio.currentTime;
     }
   },
-  setVolume(volume: number): void {
-    audio.volume = volume;
+  skip(deltaSeconds: number): void {
+    const target = audio.currentTime + deltaSeconds;
+    const clamped = Number.isFinite(audio.duration)
+      ? Math.min(Math.max(target, 0), audio.duration)
+      : Math.max(target, 0);
+    this.seek(clamped);
+  },
+  setVolume(nextVolume: number): void {
+    // 感知曲线：滑杆线性位置平方后作为线性增益，低音量段更细腻。
+    volume = Math.min(Math.max(nextVolume, 0), 1);
+    audio.volume = volume * volume;
+  },
+  setPlaybackRate(rate: number): void {
+    playbackRate = Math.min(Math.max(rate, 0.25), 4);
+    audio.playbackRate = playbackRate;
   },
 };

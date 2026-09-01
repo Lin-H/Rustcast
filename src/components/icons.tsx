@@ -50,6 +50,78 @@ export function VolumeIcon({ className = "h-5 w-5" }: IconProps) {
   );
 }
 
+export function Back15Icon({ className = "h-5 w-5" }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M11.5 5.5a8 8 0 1 1-6.9 3.9"
+      />
+      <path fill="currentColor" d="M4 4.5v5h5" />
+      <text
+        x="12"
+        y="16.2"
+        text-anchor="middle"
+        font-size="7.5"
+        font-weight="700"
+        fill="currentColor"
+        font-family="system-ui, sans-serif"
+      >
+        15
+      </text>
+    </svg>
+  );
+}
+
+export function Forward15Icon({ className = "h-5 w-5" }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12.5 5.5a8 8 0 1 0 6.9 3.9"
+      />
+      <path fill="currentColor" d="M20 4.5v5h-5" />
+      <text
+        x="12"
+        y="16.2"
+        text-anchor="middle"
+        font-size="7.5"
+        font-weight="700"
+        fill="currentColor"
+        font-family="system-ui, sans-serif"
+      >
+        15
+      </text>
+    </svg>
+  );
+}
+
+export function SpeedometerIcon({ className = "h-5 w-5" }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        d="M4.5 17a8.5 8.5 0 1 1 15 0"
+      />
+      <path
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        d="M12 12.5 16 9"
+      />
+      <circle cx="12" cy="13.5" r="1.6" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function PlusIcon({ className = "h-4 w-4" }: IconProps) {
   return (
     <svg
@@ -62,6 +134,44 @@ export function PlusIcon({ className = "h-4 w-4" }: IconProps) {
       aria-hidden="true"
     >
       <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+export function ImportIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3v12" />
+      <path d="m7.5 10.5 4.5 4.5 4.5-4.5" />
+      <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+    </svg>
+  );
+}
+
+export function ExportIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 15V3" />
+      <path d="m7.5 7.5 4.5-4.5 4.5 4.5" />
+      <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
     </svg>
   );
 }

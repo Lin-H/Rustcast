@@ -1,7 +1,7 @@
 import type { FormEvent } from "preact/compat";
 import { useState } from "preact/hooks";
 import { Artwork } from "./Artwork";
-import { PlusIcon, RefreshIcon, TrashIcon } from "./icons";
+import { ExportIcon, ImportIcon, PlusIcon, RefreshIcon, TrashIcon } from "./icons";
 import { dispatch, useAppSelector } from "../store";
 
 export function Sidebar() {
@@ -12,7 +12,9 @@ export function Sidebar() {
   const adding = useAppSelector((state) => state.feed.adding);
   const addError = useAppSelector((state) => state.feed.addError);
   const refreshingFeedId = useAppSelector((state) => state.feed.refreshingFeedId);
+  const opmlBusy = useAppSelector((state) => state.feed.opmlBusy);
   const [url, setUrl] = useState("");
+  const [opmlNotice, setOpmlNotice] = useState<string | null>(null);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -29,6 +31,41 @@ export function Sidebar() {
       return;
     }
     void dispatch.feed.removeSubscription(feedId);
+  };
+
+  const handleImport = async () => {
+    if (opmlBusy) {
+      return;
+    }
+    setOpmlNotice(null);
+    const result = await dispatch.feed.importOpml();
+    if (result === null) {
+      return;
+    }
+    const parts = [`导入 ${result.imported} 个订阅源`];
+    if (result.skipped > 0) {
+      parts.push(`${result.skipped} 个已存在`);
+    }
+    if (result.failed.length > 0) {
+      parts.push(`${result.failed.length} 个失败`);
+    }
+    setOpmlNotice(
+      parts.join("，") +
+        (result.failed.length > 0
+          ? `（首个失败：${result.failed[0]?.url ?? ""}）`
+          : ""),
+    );
+  };
+
+  const handleExport = async () => {
+    if (opmlBusy) {
+      return;
+    }
+    setOpmlNotice(null);
+    const path = await dispatch.feed.exportOpml();
+    if (path !== null) {
+      setOpmlNotice(`已导出到 ${path}`);
+    }
   };
 
   return (
@@ -132,7 +169,33 @@ export function Sidebar() {
           })}
         </div>
 
-        <div class="mt-3 text-[10.5px] text-faint">订阅和播放进度保存在本地数据库</div>
+        <div class="mt-3 flex items-center gap-2">
+          <button
+            type="button"
+            disabled={opmlBusy}
+            onClick={() => void handleImport()}
+            class="flex h-7 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-root text-[11.5px] font-medium text-secondary transition-colors hover:bg-card-hover hover:text-accent disabled:cursor-wait disabled:opacity-60"
+            title="从 OPML 文件导入订阅源"
+          >
+            <ImportIcon className="h-3.5 w-3.5" />
+            {opmlBusy ? "处理中…" : "导入 OPML"}
+          </button>
+          <button
+            type="button"
+            disabled={opmlBusy}
+            onClick={() => void handleExport()}
+            class="flex h-7 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-root text-[11.5px] font-medium text-secondary transition-colors hover:bg-card-hover hover:text-accent disabled:cursor-wait disabled:opacity-60"
+            title="导出订阅源为 OPML 文件"
+          >
+            <ExportIcon className="h-3.5 w-3.5" />
+            导出 OPML
+          </button>
+        </div>
+        {opmlNotice !== null && (
+          <p class="mt-1.5 break-all text-[10.5px] text-faint">{opmlNotice}</p>
+        )}
+
+        <div class="mt-2 text-[10.5px] text-faint">订阅和播放进度保存在本地数据库</div>
       </div>
     </aside>
   );
