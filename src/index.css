@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+@theme {
+  --color-root: #0e1014;
+  --color-panel: #16191f;
+  --color-card: #1d2129;
+  --color-card-hover: #242a34;
+  --color-elevated: #222630;
+  --color-accent: #ffb454;
+  --color-accent-dim: #8a622e;
+  --color-primary: #eceff3;
+  --color-secondary: #a8afba;
+  --color-faint: #626a76;
+  --color-danger: #ff7373;
+}
+
+:root {
+  color-scheme: dark;
+  font-family:
+    "Segoe UI",
+    "Microsoft YaHei UI",
+    "Microsoft YaHei",
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+}
+
+input[type="range"] {
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+input[type="range"]:disabled::-webkit-slider-thumb {
+  background: var(--color-accent-dim);
+  box-shadow: none;
+}
+
+.show-notes {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--color-secondary);
+  overflow-wrap: anywhere;
+}
+
+.show-notes h1,
+.show-notes h2,
+.show-notes h3,
+.show-notes h4,
+.show-notes h5,
+.show-notes h6 {
+  margin: 0.7em 0 0.35em;
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.show-notes p {
+  margin: 0.55em 0;
+}
+
+.show-notes ul,
+.show-notes ol {
+  margin: 0.55em 0;
+  padding-left: 1.35em;
+}
+
+.show-notes ul {
+  list-style: disc;
+}
+
+.show-notes ol {
+  list-style: decimal;
+}
+
+.show-notes a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.show-notes img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.show-notes table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.show-notes th,
+.show-notes td {
+  border: 1px solid color-mix(in srgb, var(--color-primary) 12%, transparent);
+  padding: 0.35rem 0.5rem;
+}
