@@ -56,7 +56,7 @@ cargo test
 1. App 启动时调用 `dispatch.feed.load()`，经 `invoke("load_initial_state_command")` 读取订阅列表、上次选中订阅及其单集。
 2. 首次启动数据库为空时，Rust 自动订阅内置 Syntax FM；添加 / 刷新 / 删除分别走 `add_feed_command` / `refresh_feed_command` / `delete_feed_command`；切换订阅时 `set_selected_feed_command` 持久化选中项。
 3. Rust 使用 reqwest 下载 XML，feed-rs 解析后写入 turso（SQLite 兼容）数据库，再以 DTO 返回给 WebView。
-4. Preact Rematch store 保存订阅列表、选中订阅和分页状态（首屏 60 集，每次追加 150 集）。
+4. Preact Rematch store 保存订阅列表、选中订阅和分页状态（每页 60 集，页码窗口导航，刷新后自动夹住页码）。
 5. 点击可播放单集时，`player.playEpisode` 先做重播保护（同一集直接返回），再从 `progress.positionSecs` 续播（进度 >5 秒且未播完）并调用 `audioService.load()`；切集前先把上一集进度落库。
 6. 播放进度由前端节流保存（约 5 秒间隔），暂停、出错与播完时即时调用 `save_progress_command` 持久化。
 7. 单例 `<audio>` 事件回写 player 状态，驱动列表徽标和播放条。

@@ -25,7 +25,7 @@ export interface FeedState {
   selectedFeed: FeedDetailDto | null;
   loading: boolean;
   error: string | null;
-  visibleCount: number;
+  page: number;
   adding: boolean;
   addError: string | null;
   refreshingFeedId: string | null;
@@ -34,13 +34,23 @@ export interface FeedState {
   opmlError: string | null;
 }
 
+export const PAGE_SIZE = 60;
+
+function totalPagesOf(episodeCount: number): number {
+  return Math.max(1, Math.ceil(episodeCount / PAGE_SIZE));
+}
+
+function clampPage(page: number, episodeCount: number): number {
+  return Math.min(Math.max(1, page), totalPagesOf(episodeCount));
+}
+
 const initialState: FeedState = {
   feeds: [],
   selectedFeedId: null,
   selectedFeed: null,
   loading: true,
   error: null,
-  visibleCount: 60,
+  page: 1,
   adding: false,
   addError: null,
   refreshingFeedId: null,
@@ -64,7 +74,7 @@ export const feedModel = createModel<RootModel>()({
         loading: false,
         error: null,
         refreshError: null,
-        visibleCount: 60,
+        page: 1,
       };
     },
     setError(state, error: string): FeedState {
@@ -78,11 +88,11 @@ export const feedModel = createModel<RootModel>()({
         loading: true,
         error: null,
         refreshError: null,
-        visibleCount: 60,
+        page: 1,
       };
     },
     feedLoaded(state, feed: FeedDetailDto): FeedState {
-      return { ...state, selectedFeed: feed, loading: false, error: null, visibleCount: 60 };
+      return { ...state, selectedFeed: feed, loading: false, error: null, page: 1 };
     },
     addStarted(state): FeedState {
       return { ...state, adding: true, addError: null };
@@ -102,7 +112,7 @@ export const feedModel = createModel<RootModel>()({
         selectedFeed: result.feed,
         loading: false,
         error: null,
-        visibleCount: 60,
+        page: 1,
       };
     },
     addFailed(state, error: string): FeedState {
@@ -134,10 +144,15 @@ export const feedModel = createModel<RootModel>()({
       );
       const selectedFeed =
         state.selectedFeedId === summary.id ? payload.feed : state.selectedFeed;
+      // 刷新后单集数可能减少，夹住当前页码。
+      const page = selectedFeed === null
+        ? state.page
+        : clampPage(state.page, selectedFeed.episodes.length);
       return {
         ...state,
         feeds,
         selectedFeed,
+        page,
         refreshingFeedId: null,
         refreshError: payload.error,
         loading: false,
@@ -151,14 +166,12 @@ export const feedModel = createModel<RootModel>()({
         feeds,
         selectedFeedId: wasSelected ? null : state.selectedFeedId,
         selectedFeed: wasSelected ? null : state.selectedFeed,
+        page: wasSelected ? 1 : state.page,
       };
     },
-    showMore(state): FeedState {
+    setPage(state, page: number): FeedState {
       const total = state.selectedFeed?.episodes.length ?? 0;
-      return {
-        ...state,
-        visibleCount: Math.min(total, state.visibleCount + 150),
-      };
+      return { ...state, page: clampPage(page, total) };
     },
   },
   effects: (dispatch) => ({
