@@ -238,6 +238,14 @@ async fn export_opml_command(app: tauri::AppHandle, database: State<'_, Database
     Ok(Some(path.to_string_lossy().into_owned()))
 }
 
+/// 列出所有已完整缓存的 episode id（列表徽标用）。
+#[tauri::command]
+async fn list_cached_episodes_command(
+    cache: State<'_, Arc<AudioCache>>,
+) -> Result<Vec<String>, String> {
+    Ok(cache.list_complete().await)
+}
+
 fn main() {
     tauri::Builder::default()
         .register_asynchronous_uri_scheme_protocol("rustcast-media", |ctx, request, responder| {
@@ -321,7 +329,8 @@ fn main() {
             export_opml_command,
             artwork::cache_artwork_command,
             ensure_audio_cache_command,
-            audio_cache_status_command
+            audio_cache_status_command,
+            list_cached_episodes_command
         ])
         .run(tauri::generate_context!())
         .expect("Rustcast failed to start");

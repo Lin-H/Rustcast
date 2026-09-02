@@ -22,6 +22,9 @@ export function EpisodeCard({
 }: EpisodeCardProps) {
   const t = useTranslator();
   const language = useAppSelector((state) => state.settings.language);
+  const cached = useAppSelector((state) =>
+    state.feed.cachedEpisodeIds.includes(episode.id),
+  );
   const disabled = episode.audioUrl === null;
   const progress = episode.progress;
   const progressPercent =
@@ -93,6 +96,14 @@ export function EpisodeCard({
                 </span>
               )}
             </div>
+          )}
+          {cached && (
+            <span
+              class="mt-0.5 inline-flex w-fit items-center gap-1 rounded border border-accent-dim px-1.5 text-[10px] font-medium text-accent"
+              title={t("offlineAvailableTitle")}
+            >
+              {t("offlineAvailable")}
+            </span>
           )}
           {isCurrent && episode.articleHtml !== "" && (
             <div class="mt-1.5">

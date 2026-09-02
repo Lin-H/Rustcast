@@ -289,6 +289,9 @@ export const playerModel = createModel<RootModel>()({
       }
     },
     seek(seconds: number): void {
+      // 立即同步 currentTime，避免 scrub 提交后到 timeupdate 事件之间
+      // 进度条跳回旧位置的抖动。
+      dispatch.player.timeUpdated(seconds);
       audioPlayer.seek(seconds);
     },
     skip(deltaSeconds: number): void {
@@ -342,6 +345,10 @@ export const playerModel = createModel<RootModel>()({
       }
       cacheListenerUnlisten = listenAudioCacheProgress((event) => {
         dispatch.player.cacheProgressUpdated(event);
+        // 后台续传的旧集完成时也更新列表徽标集合。
+        if (event.complete) {
+          dispatch.feed.cachedEpisodeAdded(event.episodeId);
+        }
       });
     },
   }),

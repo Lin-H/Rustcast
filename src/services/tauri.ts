@@ -69,6 +69,10 @@ export async function audioCacheStatus(
   return invoke<AudioCacheStatus>("audio_cache_status_command", { episodeId, url });
 }
 
+export async function listCachedEpisodes(): Promise<string[]> {
+  return invoke<string[]>("list_cached_episodes_command");
+}
+
 export interface AudioCacheProgressEvent {
   episodeId: string;
   written: number;

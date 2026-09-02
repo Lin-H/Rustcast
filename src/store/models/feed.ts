@@ -4,6 +4,7 @@ import {
   deleteFeed as deleteFeedRequest,
   exportOpml as exportOpmlRequest,
   importOpml as importOpmlRequest,
+  listCachedEpisodes,
   loadFeed as loadFeedRequest,
   loadInitialState,
   refreshFeed as refreshFeedRequest,
@@ -32,6 +33,8 @@ export interface FeedState {
   refreshError: string | null;
   opmlBusy: boolean;
   opmlError: string | null;
+  /** 已完整缓存到本地的单集 id 集合（离线可用徽标）。 */
+  cachedEpisodeIds: string[];
 }
 
 export const PAGE_SIZE = 60;
@@ -57,6 +60,7 @@ const initialState: FeedState = {
   refreshError: null,
   opmlBusy: false,
   opmlError: null,
+  cachedEpisodeIds: [],
 };
 
 export const feedModel = createModel<RootModel>()({
@@ -130,6 +134,15 @@ export const feedModel = createModel<RootModel>()({
     opmlFailed(state, error: string): FeedState {
       return { ...state, opmlBusy: false, opmlError: error };
     },
+    cachedEpisodesSet(state, ids: string[]): FeedState {
+      return { ...state, cachedEpisodeIds: ids };
+    },
+    cachedEpisodeAdded(state, episodeId: string): FeedState {
+      if (state.cachedEpisodeIds.includes(episodeId)) {
+        return state;
+      }
+      return { ...state, cachedEpisodeIds: [...state.cachedEpisodeIds, episodeId] };
+    },
     refreshFinished(
       state,
       payload: { feed: FeedDetailDto | null; error: string | null },
@@ -183,6 +196,14 @@ export const feedModel = createModel<RootModel>()({
         dispatch.feed.setInitial(appState);
       } catch (error) {
         dispatch.feed.setError(error instanceof Error ? error.message : String(error));
+      }
+
+      // 已缓存单集徽标集合（失败静默，徽标只是增强信息）。
+      try {
+        const cached = await listCachedEpisodes();
+        dispatch.feed.cachedEpisodesSet(cached);
+      } catch {
+        // ignore
       }
     },
     async selectFeed(feedId: string): Promise<void> {

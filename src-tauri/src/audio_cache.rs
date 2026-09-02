@@ -94,6 +94,22 @@ impl AudioCache {
         Some((state.written, state.total))
     }
 
+    /// 列出所有已完整缓存的 episode id（扫描目录里的 .audio 文件）。
+    pub async fn list_complete(&self) -> Vec<String> {
+        let mut result = Vec::new();
+        let mut dir = match tokio::fs::read_dir(&self.directory).await {
+            Ok(dir) => dir,
+            Err(_) => return result,
+        };
+        while let Ok(Some(entry)) = dir.next_entry().await {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if let Some(id) = name.strip_suffix(".audio") {
+                result.push(id.to_owned());
+            }
+        }
+        result
+    }
+
     /// 幂等启动缓存；已完整或已有任务在跑时直接返回。
     pub async fn ensure(&self, key: &str, url: &str) -> Result<(), String> {
         if self.completed_size(key).await.is_some() {
