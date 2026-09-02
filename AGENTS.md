@@ -49,6 +49,7 @@ cargo test
 | `src-tauri/src/feed.rs` | RSS 抓取、解析、DTO、URL 规范化 |
 | `src-tauri/src/opml.rs` | OPML 解析/渲染与封面磁盘缓存实现（含单元测试） |
 | `src-tauri/src/artwork.rs` | ArtworkState 注入与 cache_artwork command |
+| `src-tauri/src/audio_cache.rs` | 分块下载、Range 协议与本地音频缓存（含单元测试） |
 | `src-tauri/src/db.rs` | turso 迁移与订阅、单集、播放进度读写 |
 | `src-tauri/capabilities/` | WebView capability 和 opener 限制 |
 | `src-tauri/tauri.conf.json` | 窗口、CSP、asset 协议与打包配置 |
@@ -68,6 +69,7 @@ cargo test
 9. OPML 导入/导出经 `import_opml_command` / `export_opml_command`：Rust 用系统对话框选路径，quick-xml 解析/渲染，逐条复用 add_feed 去重。
 10. 倍速（0.75–2x 循环）与音量保存在 localStorage，启动时应用到 audio 元素（音量经平方曲线映射为感知标度）。
 11. 主题（system/light/dark）与语言（zh/en）由 settings 模型管理：写入 localStorage 并同步 `html` class（`theme-light` / `theme-dark`），system 模式监听 `prefers-color-scheme` 变化；文案统一从 `lib/i18n.ts` 字典取。
+12. 播放前 `ensure_audio_cache_command` 注册并启动音频缓存，`<audio>` 的 src 指向 `rustcast-media://localhost/{episodeId}`；协议命中本地段读文件，未命中按需拉取；后台顺序任务每块完成时发 `audio-cache-progress` 事件驱动进度条区间与「离线可用」徽标；缓存失败自动回落远程 URL 直连。
 
 ## 关键规则与决策
 
@@ -87,6 +89,8 @@ cargo test
 - **tauri crate 必须开 `protocol-asset` feature** 才有 `app.asset_protocol_scope()`。
 - **OPML 解析用 quick-xml 0.42**：`local_name()` 返回 `LocalName`（内部 `&str`），属性解码用 `normalized_value(XmlVersion::Implicit1_0)`。
 - **快进/快退走 `audioService.skip(±15)`**，夹在 `[0, duration]`；倍速重连后由 `resetSource` 重新应用。
+- **音频播放 src 是 `rustcast-media://localhost/{episodeId}` 自定义协议**：`register_asynchronous_uri_scheme_protocol` 注册，闭包内不能让 `ctx` 逃逸——State 要先 `.inner().clone()` 成 `Arc` 再 spawn；CSP `media-src` 必须同时允许 `rustcast-media:` 与 `http://rustcast-media.localhost`（Windows WebView2 的自定义协议走 http 形式）。
+- **音频缓存失败自动回落远程直连**（playEpisode 内 try/catch），播放不中断是底线。
 - **主题切换只改 `html` class 与 CSS 变量**：浅色令牌在 `index.css` 的 `html.theme-light` 选择器下整组覆盖，`prefers-color-scheme: light` 媒体查询处理 system 模式；新增颜色令牌时两套都要维护。
 - **UI 文案不硬编码**：新增文案先加进 `lib/i18n.ts` 的 zh/en 字典，组件里用 `useTranslator()` 取；Rust 侧错误消息仍为中文（服务端语义）。
 

@@ -29,6 +29,11 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    // 音频缓存进度事件（后台顺序下载每块完成时推送）。
+    dispatch.player.attachCacheListener();
+  }, []);
+
+  useEffect(() => {
     return bindAudioEvents({
       onPlaying: () => dispatch.player.playing(),
       onPause: () => {
