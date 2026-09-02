@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use quick_xml::events::Event;
+use quick_xml::Reader;
 use sha2::{Digest, Sha256};
 use url::Url;
 
@@ -63,10 +65,15 @@ fn parse(
     let raw = feed_rs::parser::parse(std::io::Cursor::new(bytes))
         .map_err(|e| format!("RSS 解析失败: {e}"))?;
 
+    // 旁路预扫：feed-rs 不认识的命名空间扩展（libsyn:widescreen-image 等）
+    // 里的单集封面，按 item 文档顺序与 entries 对齐。
+    let extension_images = extract_extension_item_images(bytes);
+
     let episodes = raw
         .entries
         .iter()
-        .filter_map(|entry| {
+        .enumerate()
+        .filter_map(|(index, entry)| {
             let title = entry
                 .title
                 .as_ref()
@@ -108,7 +115,8 @@ fn parse(
                     })
                     .map(|duration| duration.as_secs_f64()),
                 audio_url: pick_audio(entry),
-                image_url: pick_image(entry),
+                image_url: pick_image(entry)
+                    .or_else(|| extension_images.get(index).and_then(|u| normalize_media_url(u))),
             })
         })
         .collect();
@@ -234,6 +242,68 @@ fn pick_image(entry: &feed_rs::model::Entry) -> Option<String> {
         .flat_map(|media| media.thumbnails.iter())
         .next()
         .and_then(|thumbnail| normalize_media_url(&thumbnail.image.uri))
+}
+
+/// 预扫原始 XML：按 item 文档顺序提取 feed-rs 不识别的命名空间扩展里的封面。
+/// 覆盖 libsyn:widescreen-image / libsyn:itunes-image / podcast:cover-art
+/// （podcast namespace 提案）等 <prefix:*image href="..."/> 形态。
+/// 与 feed-rs 的 entries 同为文档顺序，按索引对齐。
+fn extract_extension_item_images(bytes: &[u8]) -> Vec<String> {
+    let content = match std::str::from_utf8(bytes) {
+        Ok(content) => content,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut reader = Reader::from_str(content);
+    reader.config_mut().trim_text(true);
+
+    let mut images = Vec::new();
+    let mut buf = Vec::new();
+    let mut in_item = false;
+    let mut current: Option<String> = None;
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(event)) | Ok(Event::Empty(event)) => {
+                let name = event.name();
+                let local_name = name.local_name();
+                let local = local_name.as_ref();
+                if !in_item {
+                    if local == "item" {
+                        in_item = true;
+                        current = None;
+                    }
+                } else {
+                    // 任意命名空间下、local name 以 image 结尾且带 href 的元素。
+                    // 同时覆盖 Start 与 Empty（自闭合 <foo:image href="..." />）两种形态。
+                    if local.ends_with("image") {
+                        for attr in event.attributes().flatten() {
+                            if attr.key.as_ref() == "href" {
+                                if let Ok(value) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
+                                    current = Some(value.into_owned());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Ok(Event::End(event)) => {
+                let name = event.name();
+                let local_name = name.local_name();
+                let local = local_name.as_ref();
+                if in_item && local == "item" {
+                    images.push(current.take().unwrap_or_default());
+                    in_item = false;
+                }
+            }
+            Ok(Event::Eof) => break,
+            Ok(_) => {}
+            Err(_) => break,
+        }
+        buf.clear();
+    }
+
+    images
 }
 
 fn normalize_media_url(raw: &str) -> Option<String> {
@@ -365,5 +435,79 @@ mod tests {
     fn creates_stable_episode_keys() {
         assert_eq!(episode_key("feed", "entry"), episode_key("feed", "entry"));
         assert_ne!(episode_key("feed", "entry"), episode_key("feed2", "entry"));
+    }
+
+    #[test]
+    fn extracts_libsyn_extension_images_per_item() {
+        let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:libsyn="https://libsyn.com/rss">
+  <channel>
+    <title>Test</title>
+    <item>
+      <title>Ep 1</title>
+      <guid>ep-1</guid>
+      <libsyn:widescreen-image href="https://cdn.example.com/ep1.png" />
+    </item>
+    <item>
+      <title>Ep 2</title>
+      <guid>ep-2</guid>
+      <libsyn:itunes-image href="https://cdn.example.com/ep2.png" />
+    </item>
+    <item>
+      <title>Ep 3</title>
+      <guid>ep-3</guid>
+    </item>
+  </channel>
+</rss>"#;
+
+        let images = extract_extension_item_images(xml);
+        assert_eq!(images.len(), 3);
+        assert_eq!(images[0], "https://cdn.example.com/ep1.png");
+        assert_eq!(images[1], "https://cdn.example.com/ep2.png");
+        assert_eq!(images[2], "");
+    }
+
+    #[test]
+    fn extension_images_fall_back_to_media_thumbnails_first() {
+        // parse() 的对齐逻辑：媒体缩略图优先，扩展图仅兜底。
+        let xml = br#"<?xml version="1.0"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/" xmlns:libsyn="https://libsyn.com/rss">
+  <channel>
+    <item>
+      <title>Ep 1</title>
+      <guid>ep-1</guid>
+      <media:thumbnail url="https://cdn.example.com/media.png" />
+      <libsyn:widescreen-image href="https://cdn.example.com/libsyn.png" />
+    </item>
+  </channel>
+</rss>"#;
+
+        let parsed = parse(xml, "https://example.com/feed", "feedid", "fallback").unwrap();
+        assert_eq!(parsed.episodes.len(), 1);
+        assert_eq!(
+            parsed.episodes[0].image_url.as_deref(),
+            Some("https://cdn.example.com/media.png")
+        );
+    }
+
+    #[test]
+    fn extension_images_used_when_no_media_thumbnail() {
+        let xml = br#"<?xml version="1.0"?>
+<rss version="2.0" xmlns:libsyn="https://libsyn.com/rss">
+  <channel>
+    <item>
+      <title>Ep 1</title>
+      <guid>ep-1</guid>
+      <libsyn:widescreen-image href="https://static.libsyn.com/p/assets/ep1.png" />
+    </item>
+  </channel>
+</rss>"#;
+
+        let parsed = parse(xml, "https://example.com/feed", "feedid", "fallback").unwrap();
+        assert_eq!(parsed.episodes.len(), 1);
+        assert_eq!(
+            parsed.episodes[0].image_url.as_deref(),
+            Some("https://static.libsyn.com/p/assets/ep1.png")
+        );
     }
 }
