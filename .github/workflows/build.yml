@@ -162,15 +162,15 @@ jobs:
             "platforms": {
               "windows-x86_64": {
                 "signature": "${WIN_SIG}",
-                "url": "${REPO_URL}/${TAG_NAME}-windows-${WIN_EXE}"
+                "url": "${REPO_URL}/${WIN_EXE}"
               },
               "linux-x86_64": {
                 "signature": "${LIN_SIG}",
-                "url": "${REPO_URL}/${TAG_NAME}-linux-${LIN_APP}"
+                "url": "${REPO_URL}/${LIN_APP}"
               },
               "darwin-aarch64": {
                 "signature": "${MAC_SIG}",
-                "url": "${REPO_URL}/${TAG_NAME}-macos-${MAC_TGZ}"
+                "url": "${REPO_URL}/${MAC_TGZ}"
               }
             }
           }
