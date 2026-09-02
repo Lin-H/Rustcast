@@ -3,6 +3,7 @@ import { TopBar } from "./components/TopBar";
 import { Sidebar } from "./components/Sidebar";
 import { EpisodeList } from "./components/EpisodeList";
 import { PlayerBar } from "./components/PlayerBar";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { bindAudioEvents } from "./services/audio";
 import { dispatch, store, useAppSelector } from "./store";
 
@@ -31,6 +32,11 @@ export function App() {
   useEffect(() => {
     // 音频缓存进度事件（后台顺序下载每块完成时推送）。
     dispatch.player.attachCacheListener();
+  }, []);
+
+  useEffect(() => {
+    // 启动后自动检查更新，之后每 6 小时复查一次。
+    dispatch.update.startAutoCheck();
   }, []);
 
   useEffect(() => {
@@ -64,6 +70,7 @@ export function App() {
   return (
     <div class="flex h-full min-h-0 flex-col bg-root text-primary">
       <TopBar />
+      <UpdateBanner />
       <div class="flex min-h-0 flex-1">
         <Sidebar />
         <EpisodeList />

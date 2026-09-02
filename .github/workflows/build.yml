@@ -63,6 +63,8 @@ jobs:
       - name: Build app
         env:
           CI: true
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: pnpm tauri build
 
       - name: Rename and collect artifacts
@@ -71,8 +73,10 @@ jobs:
           mkdir -p release-assets
           case "${{ matrix.platform }}" in
             windows)
+              # NSIS exe（含 updater 产物）+ 签名
               find src-tauri/target/release/bundle -type f \( \
-                -iname "*.exe" -o -iname "*.msi" -o -iname "*.zip" \) -exec bash -c '
+                -iname "*.exe" -o -iname "*.exe.sig" \
+              \) -exec bash -c '
                   for file do
                     cp "$file" "release-assets/${TAG_NAME}-${{ matrix.platform }}-$(basename "$file")"
                   done
@@ -80,7 +84,8 @@ jobs:
               ;;
             linux)
               find src-tauri/target/release/bundle -type f \( \
-                -iname "*.AppImage" -o -iname "*.deb" -o -iname "*.tar.gz" \) -exec bash -c '
+                -iname "*.AppImage" -o -iname "*.AppImage.sig" -o -iname "*.deb" \
+              \) -exec bash -c '
                   for file do
                     cp "$file" "release-assets/${TAG_NAME}-${{ matrix.platform }}-$(basename "$file")"
                   done
@@ -88,7 +93,8 @@ jobs:
               ;;
             macos)
               find src-tauri/target/release/bundle -type f \( \
-                -iname "*.dmg" -o -iname "*.tar.gz" -o -iname "*.app.tar.gz" \) -exec bash -c '
+                -iname "*.dmg" -o -iname "*.app.tar.gz" -o -iname "*.app.tar.gz.sig" \
+              \) -exec bash -c '
                   for file do
                     cp "$file" "release-assets/${TAG_NAME}-${{ matrix.platform }}-$(basename "$file")"
                   done
@@ -114,11 +120,69 @@ jobs:
           path: release-assets
           merge-multiple: true
 
+      - name: Generate latest.json
+        shell: bash
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+          REPO_URL: https://github.com/Lin-H/Rustcast/releases/download/${{ github.ref_name }}
+        run: |
+          set -eu
+          # 从 Cargo.toml 读版本号（与 tag 一致，不带 v 前缀）
+          VERSION="${TAG_NAME#v}"
+          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          sig_of() {
+            local f
+            f=$(find release-assets -name "*${1}*.sig" | head -n 1)
+            if [ -z "$f" ]; then
+              echo "MISSING SIGNATURE for $1" >&2
+              exit 1
+            fi
+            cat "$f" | tr -d '\n\r'
+          }
+
+          dl_url() {
+            local f
+            f=$(find release-assets -name "*${1}*" ! -name "*.sig" | head -n 1)
+            basename "$f"
+          }
+
+          WIN_EXE=$(dl_url "windows-*setup.exe")
+          WIN_SIG=$(sig_of "windows-*setup.exe")
+          LIN_APP=$(dl_url "linux-*.AppImage")
+          LIN_SIG=$(sig_of "linux-*.AppImage")
+          MAC_TGZ=$(dl_url "macos-*.app.tar.gz")
+          MAC_SIG=$(sig_of "macos-*.app.tar.gz")
+
+          cat > latest.json <<EOF
+          {
+            "version": "${VERSION}",
+            "notes": "Rustcast ${VERSION}",
+            "pub_date": "${PUB_DATE}",
+            "platforms": {
+              "windows-x86_64": {
+                "signature": "${WIN_SIG}",
+                "url": "${REPO_URL}/${TAG_NAME}-windows-${WIN_EXE}"
+              },
+              "linux-x86_64": {
+                "signature": "${LIN_SIG}",
+                "url": "${REPO_URL}/${TAG_NAME}-linux-${LIN_APP}"
+              },
+              "darwin-aarch64": {
+                "signature": "${MAC_SIG}",
+                "url": "${REPO_URL}/${TAG_NAME}-macos-${MAC_TGZ}"
+              }
+            }
+          }
+          EOF
+          cat latest.json
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v3
         with:
           files: |
             release-assets/**/*
+            latest.json
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}

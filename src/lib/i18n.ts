@@ -78,6 +78,14 @@ const zh: Dict = {
   // 其他
   dateUnknown: "日期未知",
   artworkPlaceholder: "播",
+
+  updateCheck: "检查更新",
+  updateAvailable: "发现新版本",
+  updateNow: "立即更新",
+  updateLater: "稍后提醒",
+  updateDownloading: "正在下载更新…",
+  updateInstalling: "安装中，即将重启…",
+  updateCheckFailed: "检查更新失败",
 };
 
 const en: Dict = {
@@ -150,6 +158,14 @@ const en: Dict = {
 
   dateUnknown: "Unknown date",
   artworkPlaceholder: "P",
+
+  updateCheck: "Check for updates",
+  updateAvailable: "New version available",
+  updateNow: "Update now",
+  updateLater: "Later",
+  updateDownloading: "Downloading update…",
+  updateInstalling: "Installing, restarting…",
+  updateCheckFailed: "Update check failed",
 };
 
 const dicts: Record<Language, Dict> = { zh, en };

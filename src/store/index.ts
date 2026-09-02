@@ -6,12 +6,14 @@ export type { RootModel };
 import { feedModel } from "./models/feed";
 import { playerModel } from "./models/player";
 import { settingsModel } from "./models/settings";
+import { updateModel } from "./models/update";
 
 export const store = init<RootModel>({
   models: {
     feed: feedModel,
     player: playerModel,
     settings: settingsModel,
+    update: updateModel,
   },
 });
 

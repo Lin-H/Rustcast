@@ -40,6 +40,7 @@
 - 💾 **边下边播音频缓存** — 正在听的单集自动下载到应用同目录 `audio-cache/`，播放优先走本地（rustcast-media 协议）；切集后后台继续把上一集下完
 - 📊 **视频站式进度条** — 播放条叠加浅色已下载区间条；seek 未下载段自动按需拉取+缓冲
 - 📴 **离线徽标** — 整集缓存完成后显示「离线可用」，断网也能听
+- 🔄 **自动更新** — 以 GitHub Releases 为更新源，启动自动检查 + 顶栏手动检查，下载进度可视化，安装后自动重启
 
 ## 🛠️ 技术栈
 
@@ -107,7 +108,9 @@ pnpm tauri build        # 生产桌面包
 pub const DEFAULT_FEED_URL: &str = "https://feed.syntax.fm/";
 ```
 
-发布流程由 GitHub Actions 驱动：推送 `v*` 标签触发 `.github/workflows/build.yml`，在 Windows / Linux / macOS 矩阵执行 `pnpm tauri build`，产物重命名为 `<tag>-<platform>-<文件名>` 后自动发布 GitHub Release；标签含 `-alpha` / `-beta` / `-rc` 时自动标记为预发布。
+发布流程由 GitHub Actions 驱动：推送 `v*` 标签触发 `.github/workflows/build.yml`，在 Windows / Linux / macOS 矩阵执行 `pnpm tauri build`（用 GitHub Secrets 中的 `TAURI_SIGNING_PRIVATE_KEY` 签名），产物重命名为 `<tag>-<platform>-<文件名>` 后自动发布 GitHub Release，并生成 `latest.json`（updater 清单）附到同一 Release；标签含 `-alpha` / `-beta` / `-rc` 时自动标记为预发布。已安装客户端启动后自动检查并提示更新（更新源指向最新 Release 的 latest.json，签名不匹配会被拒绝）。
+
+> 发布前置：仓库 Settings → Secrets 中需配置 `TAURI_SIGNING_PRIVATE_KEY`（`pnpm tauri signer generate` 生成的私钥内容）。私钥丢失则已发版用户无法收到后续更新，请妥善备份。
 
 ## 📂 目录结构
 
