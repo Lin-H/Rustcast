@@ -1,6 +1,11 @@
 import { createModel } from "@rematch/core";
 import { audioPlayer } from "../../services/audio";
-import { saveProgress } from "../../services/tauri";
+import {
+  ensureAudioCache,
+  listenAudioCacheProgress,
+  mediaUrl,
+  saveProgress,
+} from "../../services/tauri";
 import type { EpisodeDto } from "../../types";
 import { store, type RootModel } from "../index";
 
@@ -17,6 +22,10 @@ export interface PlayerState {
   error: string | null;
   scrubbing: boolean;
   scrubValue: number;
+  /** 当前集音频缓存进度（written 字节）；null = 未在缓存。 */
+  cacheWritten: number | null;
+  cacheTotal: number | null;
+  cacheComplete: boolean;
 }
 
 const PLAYBACK_RATE_KEY = "rustcast.playbackRate";
@@ -59,6 +68,9 @@ const initialState: PlayerState = {
   error: null,
   scrubbing: false,
   scrubValue: 0,
+  cacheWritten: null,
+  cacheTotal: null,
+  cacheComplete: false,
 };
 
 const PROGRESS_SAVE_INTERVAL_MS = 5_000;
@@ -158,6 +170,24 @@ export const playerModel = createModel<RootModel>()({
     rateSet(state, rate: number): PlayerState {
       return { ...state, playbackRate: rate };
     },
+    cacheProgressUpdated(
+      state,
+      payload: { episodeId: string; written: number; total: number | null; complete: boolean },
+    ): PlayerState {
+      // 只接受当前播放集的事件，切集后旧集后台下载事件被忽略（但仍在下载）。
+      if (state.episode?.id !== payload.episodeId) {
+        return state;
+      }
+      return {
+        ...state,
+        cacheWritten: payload.written,
+        cacheTotal: payload.total,
+        cacheComplete: payload.complete,
+      };
+    },
+    cacheReset(state): PlayerState {
+      return { ...state, cacheWritten: null, cacheTotal: null, cacheComplete: false };
+    },
     errorRaised(state, error: string): PlayerState {
       return {
         ...state,
@@ -198,6 +228,7 @@ export const playerModel = createModel<RootModel>()({
       }
 
       dispatch.player.episodeSelected(episode);
+      dispatch.player.cacheReset();
       completedSaved = false;
       saveContext = { episodeId: episode.id, duration: episode.durationSecs };
 
@@ -215,8 +246,24 @@ export const playerModel = createModel<RootModel>()({
         dispatch.player.timeUpdated(resumeSeconds);
       }
 
+      // 音频缓存：注册并启动下载，之后走 rustcast-media:// 协议播放。
+      // 失败时回落远程 URL 直连，不影响播放。
+      let sourceUrl = episode.audioUrl;
       try {
-        await audioPlayer.load(episode.audioUrl, resumeSeconds);
+        const status = await ensureAudioCache(episode.id, episode.audioUrl);
+        dispatch.player.cacheProgressUpdated({
+          episodeId: episode.id,
+          written: status.written,
+          total: status.total,
+          complete: status.complete,
+        });
+        sourceUrl = mediaUrl(episode.id);
+      } catch (error) {
+        console.warn("音频缓存不可用，回落远程直连", error);
+      }
+
+      try {
+        await audioPlayer.load(sourceUrl, resumeSeconds);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
@@ -242,6 +289,9 @@ export const playerModel = createModel<RootModel>()({
       }
     },
     seek(seconds: number): void {
+      // 立即同步 currentTime，避免 scrub 提交后到 timeupdate 事件之间
+      // 进度条跳回旧位置的抖动。
+      dispatch.player.timeUpdated(seconds);
       audioPlayer.seek(seconds);
     },
     skip(deltaSeconds: number): void {
@@ -288,5 +338,20 @@ export const playerModel = createModel<RootModel>()({
         saveContext = { ...saveContext, duration: seconds };
       }
     },
+    attachCacheListener(): void {
+      // 进度事件由 App 层挂载一次；这里作为 effect 供外部显式调用。
+      if (cacheListenerUnlisten !== null) {
+        return;
+      }
+      cacheListenerUnlisten = listenAudioCacheProgress((event) => {
+        dispatch.player.cacheProgressUpdated(event);
+        // 后台续传的旧集完成时也更新列表徽标集合。
+        if (event.complete) {
+          dispatch.feed.cachedEpisodeAdded(event.episodeId);
+        }
+      });
+    },
   }),
 });
+
+let cacheListenerUnlisten: (() => void) | null = null;

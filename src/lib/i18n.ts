@@ -72,10 +72,20 @@ const zh: Dict = {
   speedToggle: "切换倍速",
   speedLabel: "播放倍速（点击切换）",
   volumeLabel: "音量",
+  offlineAvailable: "离线可用",
+  offlineAvailableTitle: "本集已完整缓存到本地，可离线播放",
 
   // 其他
   dateUnknown: "日期未知",
   artworkPlaceholder: "播",
+
+  updateCheck: "检查更新",
+  updateAvailable: "发现新版本",
+  updateNow: "立即更新",
+  updateLater: "稍后提醒",
+  updateDownloading: "正在下载更新…",
+  updateInstalling: "安装中，即将重启…",
+  updateCheckFailed: "检查更新失败",
 };
 
 const en: Dict = {
@@ -143,9 +153,19 @@ const en: Dict = {
   speedToggle: "Toggle playback speed",
   speedLabel: "Playback speed (click to toggle)",
   volumeLabel: "Volume",
+  offlineAvailable: "Offline",
+  offlineAvailableTitle: "This episode is fully cached locally and can be played offline",
 
   dateUnknown: "Unknown date",
   artworkPlaceholder: "P",
+
+  updateCheck: "Check for updates",
+  updateAvailable: "New version available",
+  updateNow: "Update now",
+  updateLater: "Later",
+  updateDownloading: "Downloading update…",
+  updateInstalling: "Installing, restarting…",
+  updateCheckFailed: "Update check failed",
 };
 
 const dicts: Record<Language, Dict> = { zh, en };

@@ -1,4 +1,4 @@
-import { BrandIcon } from "./icons";
+import { BrandIcon, RefreshIcon } from "./icons";
 import { useTranslator } from "../hooks/useTranslator";
 import { dispatch, useAppSelector } from "../store";
 import type { Language, ThemeMode } from "../store/models/settings";
@@ -12,6 +12,7 @@ export function TopBar() {
   const t = useTranslator();
   const theme = useAppSelector((state) => state.settings.theme);
   const language = useAppSelector((state) => state.settings.language);
+  const updateStatus = useAppSelector((state) => state.update.status);
 
   const themeModes: Array<{ mode: ThemeMode; label: string }> = [
     { mode: "system", label: t("themeSystem") },
@@ -28,6 +29,19 @@ export function TopBar() {
       <span class="ml-3 text-xs text-faint">{t("appSubtitle")}</span>
 
       <div class="ml-auto flex items-center gap-2.5">
+        <button
+          type="button"
+          class={`grid h-7 w-7 cursor-pointer place-items-center rounded-lg text-secondary transition-colors hover:bg-card-hover hover:text-accent disabled:cursor-wait disabled:opacity-50 ${
+            updateStatus === "checking" ? "animate-pulse" : ""
+          }`}
+          onClick={() => void dispatch.update.checkForUpdates(true)}
+          disabled={updateStatus === "checking" || updateStatus === "downloading" || updateStatus === "installing"}
+          title={t("updateCheck")}
+          aria-label={t("updateCheck")}
+        >
+          <RefreshIcon className="h-3.5 w-3.5" />
+        </button>
+
         <div
           class="flex items-center gap-0.5 rounded-lg bg-root p-0.5"
           role="group"

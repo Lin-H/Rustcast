@@ -5,9 +5,9 @@
 ## 项目概览
 
 - **名称**：Rustcast — Tauri + Preact 的 RSS 播客阅读器
-- **当前里程碑**：M3 已完成（v0.3.0），倍速播放、±15 秒快进快退、OPML 导入导出、封面磁盘缓存与音量对数标度；下一步 M4 平台化
-- **当前分支**：`feat/m2-turso-local-db`（M2/M3 功能分支，待合并 master）
-- **主要平台**：Windows；Linux/macOS 由 CI 发布构建覆盖，本地验证留待 M4
+- **当前里程碑**：M4 已完成（v0.4.0），深浅主题切换、中英双语与三平台 CI 构建验证；全部四个里程碑完成
+- **当前分支**：`feat/m2-turso-local-db`（M2–M4 功能分支，待合并 master）
+- **主要平台**：Windows 主开发；Linux/macOS 构建已由 `platform-check` workflow 验证
 - **UI 语言**：中文；代码注释保持最少必要
 
 ## 构建与验证命令
@@ -49,6 +49,7 @@ cargo test
 | `src-tauri/src/feed.rs` | RSS 抓取、解析、DTO、URL 规范化 |
 | `src-tauri/src/opml.rs` | OPML 解析/渲染与封面磁盘缓存实现（含单元测试） |
 | `src-tauri/src/artwork.rs` | ArtworkState 注入与 cache_artwork command |
+| `src-tauri/src/audio_cache.rs` | 分块下载、Range 协议与本地音频缓存（含单元测试） |
 | `src-tauri/src/db.rs` | turso 迁移与订阅、单集、播放进度读写 |
 | `src-tauri/capabilities/` | WebView capability 和 opener 限制 |
 | `src-tauri/tauri.conf.json` | 窗口、CSP、asset 协议与打包配置 |
@@ -68,6 +69,8 @@ cargo test
 9. OPML 导入/导出经 `import_opml_command` / `export_opml_command`：Rust 用系统对话框选路径，quick-xml 解析/渲染，逐条复用 add_feed 去重。
 10. 倍速（0.75–2x 循环）与音量保存在 localStorage，启动时应用到 audio 元素（音量经平方曲线映射为感知标度）。
 11. 主题（system/light/dark）与语言（zh/en）由 settings 模型管理：写入 localStorage 并同步 `html` class（`theme-light` / `theme-dark`），system 模式监听 `prefers-color-scheme` 变化；文案统一从 `lib/i18n.ts` 字典取。
+12. 播放前 `ensure_audio_cache_command` 注册并启动音频缓存，`<audio>` 的 src 指向 `rustcast-media://localhost/{episodeId}`；协议命中本地段读文件，未命中按需拉取；后台顺序任务每块完成时发 `audio-cache-progress` 事件驱动进度条区间与「离线可用」徽标；缓存失败自动回落远程 URL 直连。
+13. 更新由 update 模型管理：启动后 4 秒自动检查（每 6 小时复查），发现新版本在顶栏下方横幅提示，下载进度可视化，`downloadAndInstall` + `relaunch` 完成安装重启；手动检查入口在顶栏刷新图标。
 
 ## 关键规则与决策
 
@@ -87,6 +90,9 @@ cargo test
 - **tauri crate 必须开 `protocol-asset` feature** 才有 `app.asset_protocol_scope()`。
 - **OPML 解析用 quick-xml 0.42**：`local_name()` 返回 `LocalName`（内部 `&str`），属性解码用 `normalized_value(XmlVersion::Implicit1_0)`。
 - **快进/快退走 `audioService.skip(±15)`**，夹在 `[0, duration]`；倍速重连后由 `resetSource` 重新应用。
+- **音频播放 src 是 `rustcast-media://localhost/{episodeId}` 自定义协议**：`register_asynchronous_uri_scheme_protocol` 注册，闭包内不能让 `ctx` 逃逸——State 要先 `.inner().clone()` 成 `Arc` 再 spawn；CSP `media-src` 必须同时允许 `rustcast-media:` 与 `http://rustcast-media.localhost`（Windows WebView2 的自定义协议走 http 形式）。
+- **音频缓存失败自动回落远程直连**（playEpisode 内 try/catch），播放不中断是底线。
+- **自动更新用 tauri-plugin-updater + tauri-plugin-process**：`tauri.conf.json` 里 `createUpdaterArtifacts: true` + `plugins.updater`（pubkey/endpoints）；构建时需 `TAURI_SIGNING_PRIVATE_KEY` 环境变量（GitHub Secrets 配置，本地 `pnpm tauri build` 前也要 export，`tauri dev` 不需要）；CI release job 生成 `latest.json`（windows-x86_64/linux-x86_64/darwin-aarch64 + 签名 + URL）附到 Release，updater 端点指向 `releases/latest/download/latest.json`；私钥在 `C:\Users\<user>\.tauri\rustcast.key`，丢失则老用户收不到新更新。Windows 更新包是 NSIS `.exe`（updater 不支持 MSI），macOS 用 `.app.tar.gz`，Linux 复用 AppImage。
 - **主题切换只改 `html` class 与 CSS 变量**：浅色令牌在 `index.css` 的 `html.theme-light` 选择器下整组覆盖，`prefers-color-scheme: light` 媒体查询处理 system 模式；新增颜色令牌时两套都要维护。
 - **UI 文案不硬编码**：新增文案先加进 `lib/i18n.ts` 的 zh/en 字典，组件里用 `useTranslator()` 取；Rust 侧错误消息仍为中文（服务端语义）。
 
@@ -115,4 +121,4 @@ cargo test
 - 远程：`git@github.com:Lin-H/Rustcast.git`；默认分支 master，M2 功能分支为 `feat/m2-turso-local-db`。
 - 旧 iced/rodio 实现保存在历史分支/提交中，当前 Tauri 重构分支不应保留死代码。
 - 发布时打 `v*` 标签并推送：CI 自动构建 Windows / Linux / macOS 三平台产物并发布 GitHub Release；含 `-alpha` / `-beta` / `-rc` 的标签自动标记为预发布。
-- 当前重构从 `0.2.0` 开始（M2）；M3 对应 `0.3.0`。
+- 当前重构从 `0.2.0` 开始（M2）；M3 对应 `0.3.0`，M4 对应 `0.4.0`。

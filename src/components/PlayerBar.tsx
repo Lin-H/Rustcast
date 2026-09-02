@@ -26,6 +26,9 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
   const error = useAppSelector((state) => state.player.error);
   const scrubbing = useAppSelector((state) => state.player.scrubbing);
   const scrubValue = useAppSelector((state) => state.player.scrubValue);
+  const cacheWritten = useAppSelector((state) => state.player.cacheWritten);
+  const cacheTotal = useAppSelector((state) => state.player.cacheTotal);
+  const cacheComplete = useAppSelector((state) => state.player.cacheComplete);
 
   if (episode === null) {
     return (
@@ -54,6 +57,19 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
     const target = scrubValue;
     dispatch.player.scrubCommitted();
     dispatch.player.seek(target);
+  };
+
+  const cachePercent =
+    cacheWritten !== null && cacheTotal !== null && cacheTotal > 0
+      ? Math.min(100, (cacheWritten / cacheTotal) * 100)
+      : null;
+  const progressPercent = progressMax > 0 ? (progressValue / progressMax) * 100 : 0;
+  const progressPct = `${Math.min(100, Math.max(0, progressPercent))}%`;
+  const cachedPct =
+    cachePercent !== null ? `${cachePercent}%` : progressPct;
+  const trackStyle = {
+    "--progress": progressPct,
+    "--cached": cachedPct,
   };
 
   const cycleRate = () => {
@@ -95,6 +111,7 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
             step={1}
             value={progressValue}
             aria-label={t("progressLabel")}
+            style={trackStyle}
             onInput={(event) => {
               if (!scrubbing) {
                 dispatch.player.scrubStarted();
@@ -107,6 +124,14 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
           />
           <div class="mt-1 flex text-[11px]">
             <span class="text-accent">{formatTime(progressValue)}</span>
+            {cacheComplete && (
+              <span
+                class="ml-2 rounded border border-accent-dim px-1 text-[9.5px] font-medium leading-[14px] text-accent"
+                title={t("offlineAvailableTitle")}
+              >
+                {t("offlineAvailable")}
+              </span>
+            )}
             <span class="ml-auto text-faint">{formatTime(displayDuration)}</span>
           </div>
         </div>
@@ -159,7 +184,7 @@ export function PlayerBar({ fallbackImage }: { fallbackImage: string | null }) {
             step={0.01}
             value={volume}
             aria-label={t("volumeLabel")}
-            class="w-[112px]"
+            class="range-plain w-[112px]"
             onInput={(event) => {
               const nextVolume = Number(event.currentTarget.value);
               dispatch.player.volumeSet(nextVolume);

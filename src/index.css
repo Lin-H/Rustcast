@@ -82,8 +82,22 @@ input[type="range"] {
   width: 100%;
   height: 4px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  /* 三段式：已播放（accent）| 已缓存未播（accent 25% 透明）| 未下载（primary 16%）。
+     百分比由组件内联 --progress / --cached 变量提供，缺省时全部视为已播放。 */
+  background: linear-gradient(
+    to right,
+    var(--color-accent) 0%,
+    var(--color-accent) var(--progress, 0%),
+    color-mix(in srgb, var(--color-accent) 25%, transparent) var(--progress, 0%),
+    color-mix(in srgb, var(--color-accent) 25%, transparent) var(--cached, 0%),
+    color-mix(in srgb, var(--color-primary) 16%, transparent) var(--cached, 0%),
+    color-mix(in srgb, var(--color-primary) 16%, transparent) 100%
+  );
   outline: none;
+}
+
+input[type="range"].range-plain {
+  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
 }
 
 input[type="range"]::-webkit-slider-thumb {

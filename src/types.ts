@@ -63,3 +63,9 @@ export interface ImportOpmlResult {
   skipped: number;
   failed: Array<{ url: string; error: string }>;
 }
+
+export interface AudioCacheStatus {
+  written: number;
+  total: number | null;
+  complete: boolean;
+}
