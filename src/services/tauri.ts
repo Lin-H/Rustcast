@@ -27,6 +27,10 @@ export async function setSelectedFeed(feedId: string): Promise<void> {
   return invoke<void>("set_selected_feed_command", { feedId });
 }
 
+export async function reorderFeeds(feedIds: string[]): Promise<void> {
+  return invoke<void>("reorder_feeds_command", { feedIds });
+}
+
 export async function addFeed(url: string): Promise<AddFeedResult> {
   return invoke<AddFeedResult>("add_feed_command", { url });
 }

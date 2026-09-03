@@ -1,4 +1,4 @@
-import type { FormEvent } from "preact/compat";
+import type { DragEvent, FormEvent } from "preact/compat";
 import { useState } from "preact/hooks";
 import { Artwork } from "./Artwork";
 import { ExportIcon, ImportIcon, PlusIcon, RefreshIcon, TrashIcon } from "./icons";
@@ -17,7 +17,56 @@ export function Sidebar() {
   const opmlBusy = useAppSelector((state) => state.feed.opmlBusy);
   const [url, setUrl] = useState("");
   const [opmlNotice, setOpmlNotice] = useState<string | null>(null);
+  const [draggingFeedId, setDraggingFeedId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const t = useTranslator();
+
+  const handleDragStart = (event: DragEvent<HTMLElement>, feedId: string) => {
+    setDraggingFeedId(feedId);
+    if (event.dataTransfer !== null) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", feedId);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggingFeedId(null);
+    setDropTargetId(null);
+  };
+
+  const handleDragOver = (event: DragEvent<HTMLElement>, feedId: string) => {
+    if (draggingFeedId === null || draggingFeedId === feedId) {
+      return;
+    }
+    event.preventDefault();
+    if (event.dataTransfer !== null) {
+      event.dataTransfer.dropEffect = "move";
+    }
+    setDropTargetId(feedId);
+  };
+
+  const handleDrop = (event: DragEvent<HTMLElement>, feedId: string) => {
+    if (draggingFeedId === null || draggingFeedId === feedId) {
+      return;
+    }
+    event.preventDefault();
+    const sourceId = draggingFeedId;
+    const order = feeds.map((feed) => feed.id);
+    const from = order.indexOf(sourceId);
+    const to = order.indexOf(feedId);
+    if (from === -1 || to === -1) {
+      handleDragEnd();
+      return;
+    }
+    const moved = order.splice(from, 1)[0];
+    if (moved === undefined) {
+      handleDragEnd();
+      return;
+    }
+    order.splice(to, 0, moved);
+    void dispatch.feed.reorderSubscriptions(order);
+    handleDragEnd();
+  };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -128,14 +177,28 @@ export function Sidebar() {
           {feeds.length === 0 && !loading && (
             <p class="py-6 text-center text-xs text-faint">{t("noFeedsHint")}</p>
           )}
+          {feeds.length > 0 && (
+            <p class="px-2 pb-1 text-[10px] text-faint/70">{t("dragToReorder")}</p>
+          )}
           {feeds.map((feed) => {
             const selected = feed.id === selectedFeedId;
             const refreshing = refreshingFeedIds.includes(feed.id);
             return (
               <div
                 key={feed.id}
-                class={`group flex items-center gap-1.5 rounded-lg px-2 py-2 ${
-                  selected ? "bg-elevated" : "hover:bg-card-hover"
+                draggable={true}
+                onDragStart={(event) => handleDragStart(event, feed.id)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(event) => handleDragOver(event, feed.id)}
+                onDrop={(event) => handleDrop(event, feed.id)}
+                class={`group flex items-center gap-1.5 rounded-lg px-2 py-2 transition-colors ${
+                  draggingFeedId === feed.id
+                    ? "opacity-40"
+                    : dropTargetId === feed.id
+                      ? "bg-elevated ring-1 ring-accent-dim"
+                      : selected
+                        ? "bg-elevated"
+                        : "hover:bg-card-hover"
                 }`}
               >
                 <button
