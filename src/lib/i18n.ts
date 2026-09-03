@@ -5,6 +5,7 @@ type Dict = Record<string, string>;
 const zh: Dict = {
   // 顶栏
   appSubtitle: "RSS 音频播放器",
+  appVersion: "版本",
   themeSystem: "跟随系统",
   themeLight: "浅色",
   themeDark: "深色",
@@ -91,6 +92,7 @@ const zh: Dict = {
 
 const en: Dict = {
   appSubtitle: "RSS Audio Player",
+  appVersion: "Version",
   themeSystem: "System",
   themeLight: "Light",
   themeDark: "Dark",

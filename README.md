@@ -1,8 +1,8 @@
 # Rustcast
 
-一款使用 **Tauri 2 + Preact + Tailwind CSS** 构建的轻量 RSS 播客阅读器。M4 平台化已完成：深浅主题切换与中英双语，三平台（Windows/Linux/macOS）构建均经 CI 验证；并保留 M2/M3 的多订阅源管理、SQLite 持久化、续播记忆、倍速、±15 秒、OPML、封面缓存与感知音量。
+一款使用 **Tauri 2 + Preact + Tailwind CSS** 构建的轻量 RSS 播客阅读器：多订阅源管理、SQLite 持久化、续播记忆、倍速、±15 秒、OPML 导入导出、封面/音频双磁盘缓存（边下边播）、深浅主题、中英双语、分页浏览、一键刷新与 GitHub Releases 自动更新，三平台（Windows/Linux/macOS）构建均经 CI 验证。
 
-![status](https://img.shields.io/badge/version-0.4.0-blue) ![milestone](https://img.shields.io/badge/milestone-M4%20done-brightgreen)
+![version](https://img.shields.io/badge/version-0.5.2-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tauri](https://img.shields.io/badge/Tauri%202-v2.11-orange) ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey) ![i18n](https://img.shields.io/badge/i18n-%E4%B8%AD%E6%96%87%20%7C%20English-informational)
 
 ## ✨ 功能特性（M1）
 
@@ -39,8 +39,15 @@
 
 - 💾 **边下边播音频缓存** — 正在听的单集自动下载到应用同目录 `audio-cache/`，播放优先走本地（rustcast-media 协议）；切集后后台继续把上一集下完
 - 📊 **视频站式进度条** — 播放条叠加浅色已下载区间条；seek 未下载段自动按需拉取+缓冲
-- 📴 **离线徽标** — 整集缓存完成后显示「离线可用」，断网也能听
-- 🔄 **自动更新** — 以 GitHub Releases 为更新源，启动自动检查 + 顶栏手动检查，下载进度可视化，安装后自动重启
+- 📴 **离线徽标** — 整集缓存完成后显示「离线可用」，单集列表与播放条同步展示，断网也能听
+- 🔄 **自动更新** — 以 GitHub Releases 为更新源，minisign 签名验证，启动自动检查 + 顶栏手动检查，下载进度可视化，静默安装后自动重启
+
+## ✨ 其他特性
+
+- 🧲 **命名空间封面兼容** — libsyn:widescreen-image 等第三方扩展的单集封面自动识别（media 缩略图优先，扩展兜底）
+- 🃏 **一键刷新** — 订阅源标题旁全量刷新按钮，并行刷新互不阻塞
+- 🏷️ **版本徽标** — 顶栏实时显示当前应用版本
+- 🇨🇳 **中文优先 UI** — 深色琥珀主题，中文/英文一键切换
 
 ## 🛠️ 技术栈
 
@@ -49,11 +56,12 @@
 | 桌面壳 | Tauri 2 | Windows 优先开发；保留跨平台打包能力 |
 | 前端 | Preact + TypeScript | 轻量 UI 和类型化状态 |
 | 样式 | Tailwind CSS v4 | 设计令牌集中在 `src/index.css` |
-| 状态 | Rematch | Feed 与播放器两个模型 |
+| 状态 | Rematch | `feed` / `player` / `settings` / `update` 四个模型 |
 | 播放 | HTMLAudioElement | 播放状态由前端音频服务驱动 |
 | RSS | feed-rs + reqwest | Rust command 抓取并解析任意订阅源 |
 | 存储 | turso | SQLite 兼容本地单文件库，迁移记录在 `schema_migrations` |
 | 外链 | tauri-plugin-opener | 仅授权 HTTP/HTTPS，通过系统浏览器打开 |
+| 更新 | tauri-plugin-updater + process | minisign 签名 + GitHub Releases 清单 |
 | CI | GitHub Actions | `v*` 标签触发三平台构建并发布 Release |
 
 ## 🏗️ 架构
@@ -65,13 +73,16 @@
 │ audioService → HTMLAudioElement            │
 │ DOMPurify → 受限 show notes                │
 └───────────────┬────────────────────────────┘
-                │ Tauri IPC（11 个 command）
+                │ Tauri IPC（14 个 command）
                 │ load_initial_state / list_feeds / load_feed / set_selected_feed
                 │ add_feed / refresh_feed / delete_feed / save_progress
                 │ import_opml / export_opml / cache_artwork
+                │ ensure_audio_cache / audio_cache_status / list_cached_episodes
 ┌───────────────▼────────────────────────────┐
 │ Rust backend                               │
 │ reqwest → feed-rs → turso (SQLite)         │
+│ rustcast-media:// 边下边播音频缓存        │
+│ updater → GitHub Releases latest.json      │
 └────────────────────────────────────────────┘
 ```
 
@@ -117,23 +128,26 @@ pub const DEFAULT_FEED_URL: &str = "https://feed.syntax.fm/";
 ```text
 src/
 ├── App.tsx               # 应用布局与音频事件绑定
-├── components/           # 顶栏、侧栏、列表、卡片、播放条
-├── lib/                  # 时间格式化和 HTML 净化
+├── components/           # 顶栏、侧栏、列表、卡片、播放条、更新横幅
+├── hooks/                # useTranslator 取文案 hook
+├── lib/                  # i18n 字典、时间格式化和 HTML 净化
 ├── services/             # Tauri IPC 与单例 audio 服务
-├── store/                # Rematch store 和模型
+├── store/                # Rematch store：feed / player / settings / update
 └── types.ts              # Feed/Episode DTO 类型
 
 src-tauri/
-├── capabilities/         # Tauri capability、dialog 与 opener 权限
+├── capabilities/         # Tauri capability、dialog/updater/process 权限
 ├── src/artwork.rs        # 封面缓存状态与 cache_artwork command
+├── src/audio_cache.rs    # 分块下载、Range 协议与本地音频缓存
 ├── src/db.rs             # turso 迁移、订阅/单集/进度读写
 ├── src/feed.rs           # RSS 抓取、解析、DTO 和 URL 规范化
 ├── src/main.rs           # Tauri builder 与 command
-├── src/opml.rs           # OPML 解析/渲染与封面缓存实现
-└── tauri.conf.json       # 窗口、CSP、asset 协议与打包配置
+├── src/opml.rs           # OPML 解析/渲染与封面磁盘缓存实现
+└── tauri.conf.json       # 窗口、CSP、updater 与打包配置
 
 .github/
-└── workflows/build.yml   # v* 标签触发的三平台发布构建
+├── workflows/build.yml           # v* 标签触发的三平台发布构建
+└── workflows/platform-check.yml # 手动触发的三平台构建验证
 ```
 
 ## ⚠️ 已知限制
@@ -168,3 +182,14 @@ src-tauri/
 
 - [x] Linux/macOS 构建验证（`platform-check` workflow 三平台全绿）
 - [x] 深浅主题切换与多语言
+
+### M5 — 缓存与更新 ✅ 已完成（v0.5.0–v0.5.2）
+
+- [x] 边下边播音频缓存（rustcast-media:// 自定义协议 + 视频站式进度条）
+- [x] 离线徽标与列表缓存状态
+- [x] 自动更新（GitHub Releases + minisign 签名 + latest.json）
+- [x] 一键刷新全部订阅源
+- [x] libsyn 等命名空间扩展封面兼容
+- [x] 顶栏版本徽标
+
+> 后续新想法按需追加。
