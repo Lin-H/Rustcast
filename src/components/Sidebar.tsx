@@ -12,7 +12,8 @@ export function Sidebar() {
   const error = useAppSelector((state) => state.feed.error);
   const adding = useAppSelector((state) => state.feed.adding);
   const addError = useAppSelector((state) => state.feed.addError);
-  const refreshingFeedId = useAppSelector((state) => state.feed.refreshingFeedId);
+  const refreshingFeedIds = useAppSelector((state) => state.feed.refreshingFeedIds);
+  const refreshingAll = useAppSelector((state) => state.feed.refreshingAll);
   const opmlBusy = useAppSelector((state) => state.feed.opmlBusy);
   const [url, setUrl] = useState("");
   const [opmlNotice, setOpmlNotice] = useState<string | null>(null);
@@ -77,7 +78,23 @@ export function Sidebar() {
       <div class="flex h-full w-full flex-col rounded-xl bg-card p-4">
         <div class="flex items-center justify-between">
           <h2 class="text-[15px] font-bold text-primary">{t("subscriptions")}</h2>
-          <span class="text-xs text-faint">{feeds.length}</span>
+          <div class="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={feeds.length === 0 || refreshingAll}
+              class="grid h-6 w-6 cursor-pointer place-items-center rounded-md text-faint transition-colors hover:bg-card-hover hover:text-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+              onClick={() => void dispatch.feed.refreshAllSubscriptions()}
+              title={t("refreshAllSubscriptions")}
+              aria-label={t("refreshAllSubscriptions")}
+            >
+              {refreshingAll || refreshingFeedIds.length > 0 ? (
+                <span class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+              ) : (
+                <RefreshIcon className="h-3.5 w-3.5" />
+              )}
+            </button>
+            <span class="text-xs text-faint">{feeds.length}</span>
+          </div>
         </div>
 
         <form class="mt-3 flex gap-2" onSubmit={handleSubmit}>
@@ -113,7 +130,7 @@ export function Sidebar() {
           )}
           {feeds.map((feed) => {
             const selected = feed.id === selectedFeedId;
-            const refreshing = feed.id === refreshingFeedId;
+            const refreshing = refreshingFeedIds.includes(feed.id);
             return (
               <div
                 key={feed.id}

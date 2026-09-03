@@ -29,8 +29,10 @@ export interface FeedState {
   page: number;
   adding: boolean;
   addError: string | null;
-  refreshingFeedId: string | null;
+  refreshingFeedIds: string[];
   refreshError: string | null;
+  /** 一键刷新全部进行中。 */
+  refreshingAll: boolean;
   opmlBusy: boolean;
   opmlError: string | null;
   /** 已完整缓存到本地的单集 id 集合（离线可用徽标）。 */
@@ -56,8 +58,9 @@ const initialState: FeedState = {
   page: 1,
   adding: false,
   addError: null,
-  refreshingFeedId: null,
+  refreshingFeedIds: [],
   refreshError: null,
+  refreshingAll: false,
   opmlBusy: false,
   opmlError: null,
   cachedEpisodeIds: [],
@@ -123,7 +126,20 @@ export const feedModel = createModel<RootModel>()({
       return { ...state, adding: false, addError: error };
     },
     refreshStarted(state, feedId: string): FeedState {
-      return { ...state, refreshingFeedId: feedId, refreshError: null };
+      if (state.refreshingFeedIds.includes(feedId)) {
+        return state;
+      }
+      return {
+        ...state,
+        refreshingFeedIds: [...state.refreshingFeedIds, feedId],
+        refreshError: null,
+      };
+    },
+    refreshAllStarted(state): FeedState {
+      return { ...state, refreshingAll: true, refreshError: null };
+    },
+    refreshAllFinished(state): FeedState {
+      return { ...state, refreshingAll: false };
     },
     opmlStarted(state): FeedState {
       return { ...state, opmlBusy: true, opmlError: null };
@@ -147,16 +163,26 @@ export const feedModel = createModel<RootModel>()({
       state,
       payload: { feed: FeedDetailDto | null; error: string | null },
     ): FeedState {
+      const summary = payload.feed?.feed;
+      const refreshingFeedIds = summary
+        ? state.refreshingFeedIds.filter((id) => id !== summary.id)
+        : state.refreshingFeedIds;
+
       if (payload.feed === null) {
-        return { ...state, refreshingFeedId: null, refreshError: payload.error };
+        return {
+          ...state,
+          refreshingFeedIds,
+          refreshError: payload.error,
+        };
       }
 
-      const summary = payload.feed.feed;
       const feeds = state.feeds.map((feed) =>
-        feed.id === summary.id ? { ...summary, episodeCount: payload.feed!.episodes.length } : feed,
+        feed.id === summary!.id
+          ? { ...summary!, episodeCount: payload.feed!.episodes.length }
+          : feed,
       );
       const selectedFeed =
-        state.selectedFeedId === summary.id ? payload.feed : state.selectedFeed;
+        state.selectedFeedId === summary!.id ? payload.feed : state.selectedFeed;
       // 刷新后单集数可能减少，夹住当前页码。
       const page = selectedFeed === null
         ? state.page
@@ -166,7 +192,7 @@ export const feedModel = createModel<RootModel>()({
         feeds,
         selectedFeed,
         page,
-        refreshingFeedId: null,
+        refreshingFeedIds,
         refreshError: payload.error,
         loading: false,
       };
@@ -238,6 +264,26 @@ export const feedModel = createModel<RootModel>()({
           feed: null,
           error: error instanceof Error ? error.message : String(error),
         });
+      }
+    },
+    /** 一键刷新全部订阅源：并行请求，逐个落状态；单个失败不中断其他。 */
+    async refreshAllSubscriptions(): Promise<void> {
+      const ids = store.getState().feed.feeds.map((feed) => feed.id);
+      if (ids.length === 0 || store.getState().feed.refreshingAll) {
+        return;
+      }
+
+      dispatch.feed.refreshAllStarted();
+      for (const id of ids) {
+        dispatch.feed.refreshStarted(id);
+      }
+
+      try {
+        await Promise.allSettled(
+          ids.map((id) => dispatch.feed.refreshSubscription(id)),
+        );
+      } finally {
+        dispatch.feed.refreshAllFinished();
       }
     },
     async removeSubscription(feedId: string): Promise<void> {
