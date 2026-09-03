@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use db::{
     SaveProgressInput, add_feed, delete_feed, list_feed_summaries, load_feed, load_initial_state,
-    refresh_feed, save_progress, set_selected_feed,
+    refresh_feed, reorder_feeds, save_progress, set_selected_feed,
 };
 use tauri::{Manager, State};
 use tauri_plugin_dialog::DialogExt;
@@ -57,6 +57,14 @@ async fn set_selected_feed_command(
     feed_id: String,
 ) -> Result<(), String> {
     set_selected_feed(&database, &feed_id).await
+}
+
+#[tauri::command]
+async fn reorder_feeds_command(
+    database: State<'_, Database>,
+    feed_ids: Vec<String>,
+) -> Result<(), String> {
+    reorder_feeds(&database, &feed_ids).await
 }
 
 #[tauri::command]
@@ -323,6 +331,7 @@ fn main() {
             list_feeds_command,
             load_feed_command,
             set_selected_feed_command,
+            reorder_feeds_command,
             add_feed_command,
             refresh_feed_command,
             delete_feed_command,

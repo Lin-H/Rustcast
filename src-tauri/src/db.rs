@@ -57,9 +57,26 @@ const MIGRATIONS: &[(&str, &str)] = &[(
         value TEXT NOT NULL
     );
     "#,
+), (
+    "0002_add_feed_sort_order",
+    r#"
+    ALTER TABLE feeds ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
+
+    -- 回填：按加入顺序生成 0,1,2,3…，与迁移前 ORDER BY added_at ASC 的展示序一致。
+    UPDATE feeds
+    SET sort_order = (
+        SELECT COUNT(*)
+        FROM feeds AS earlier
+        WHERE earlier.added_at < feeds.added_at
+           OR (earlier.added_at = feeds.added_at AND earlier.id < feeds.id)
+    );
+    "#,
 )];
 
-const KNOWN_MIGRATIONS: &[&str] = &["0001_create_subscriptions"];
+const KNOWN_MIGRATIONS: &[&str] = &[
+    "0001_create_subscriptions",
+    "0002_add_feed_sort_order",
+];
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -271,6 +288,51 @@ pub async fn set_selected_feed(database: &Database, feed_id: &str) -> Result<(),
     set_app_state_value(&conn, "selected_feed_id", feed_id).await
 }
 
+/// 校验并持久化订阅源顺序：feed_ids 必须是当前全部订阅 id 的一组排列（去重后）。
+/// 逐行写 sort_order = 0..n；校验失败不写库。
+pub async fn reorder_feeds(database: &Database, feed_ids: &[String]) -> Result<(), String> {
+    if feed_ids.is_empty() {
+        return Ok(());
+    }
+
+    let mut conn = connection(database).await?;
+
+    let mut seen = HashSet::new();
+    for id in feed_ids {
+        if !seen.insert(id.as_str()) {
+            return Err("订阅源顺序包含重复项".to_owned());
+        }
+    }
+
+    let mut rows = conn
+        .query("SELECT id FROM feeds", ())
+        .await
+        .map_err(db_error("读取订阅源失败"))?;
+    let mut existing = HashSet::new();
+    while let Some(row) = rows.next().await.map_err(db_error("读取订阅源失败"))? {
+        let id: String = row.get(0).map_err(db_error("读取订阅源失败"))?;
+        existing.insert(id);
+    }
+
+    if seen.len() != existing.len() || !seen.iter().all(|id| existing.contains(*id)) {
+        return Err("订阅源列表已变化，请刷新后重试".to_owned());
+    }
+
+    let tx = conn
+        .transaction()
+        .await
+        .map_err(db_error("开启排序事务失败"))?;
+    for (index, id) in feed_ids.iter().enumerate() {
+        tx.execute(
+            "UPDATE feeds SET sort_order = ?1 WHERE id = ?2",
+            (i64::try_from(index).unwrap_or(i64::MAX), id.as_str()),
+        )
+        .await
+        .map_err(db_error("保存订阅源顺序失败"))?;
+    }
+    tx.commit().await.map_err(db_error("保存订阅源顺序失败"))
+}
+
 pub async fn add_feed(database: &Database, raw_url: &str) -> Result<AddFeedResult, String> {
     let normalized_url = normalize_feed_url(raw_url)?;
     let feed_id = hash_feed_url(&normalized_url)?;
@@ -299,11 +361,26 @@ pub async fn add_feed(database: &Database, raw_url: &str) -> Result<AddFeedResul
         .transaction()
         .await
         .map_err(db_error("开启订阅写入事务失败"))?;
+
+    // 新订阅排到列表末尾：取当前最大 sort_order + 1（迁移回填后必然有值）。
+    let next_sort_order: i64 = {
+        let mut rows = tx
+            .query("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM feeds", ())
+            .await
+            .map_err(db_error("读取订阅顺序失败"))?;
+        let row = rows
+            .next()
+            .await
+            .map_err(db_error("读取订阅顺序失败"))?
+            .ok_or_else(|| "读取订阅顺序失败".to_owned())?;
+        row.get(0).map_err(db_error("读取订阅顺序失败"))?
+    };
+
     tx.execute(
         r#"
         INSERT INTO feeds
-            (id, url, title, description, logo_url, added_at, last_refreshed_at, last_error)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL)
+            (id, url, title, description, logo_url, added_at, last_refreshed_at, last_error, sort_order)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, ?8)
         "#,
         params_from_iter(vec![
             Value::from(parsed.feed_id.clone()),
@@ -313,6 +390,7 @@ pub async fn add_feed(database: &Database, raw_url: &str) -> Result<AddFeedResul
             Value::from(parsed.logo_url.clone()),
             Value::from(now_secs()),
             Value::from(now_secs()),
+            Value::from(next_sort_order),
         ]),
     )
     .await
@@ -501,7 +579,7 @@ async fn query_all_feed_summaries(conn: &turso::Connection) -> Result<Vec<FeedSu
             FROM feeds f
             LEFT JOIN episodes e ON e.feed_id = f.id
             GROUP BY f.id
-            ORDER BY f.added_at ASC, f.id ASC
+            ORDER BY f.sort_order ASC, f.added_at ASC, f.id ASC
             "#,
             (),
         )

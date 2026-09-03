@@ -8,6 +8,7 @@ import {
   loadFeed as loadFeedRequest,
   loadInitialState,
   refreshFeed as refreshFeedRequest,
+  reorderFeeds as reorderFeedsRequest,
   setSelectedFeed,
 } from "../../services/tauri";
 import type {
@@ -208,6 +209,17 @@ export const feedModel = createModel<RootModel>()({
         page: wasSelected ? 1 : state.page,
       };
     },
+    /** 乐观重排：拖拽时立即按新顺序移动列表项，落库失败由 effect 回滚。 */
+    feedsReordered(state, feedIds: string[]): FeedState {
+      const byId = new Map(state.feeds.map((feed) => [feed.id, feed]));
+      const feeds = feedIds
+        .map((id) => byId.get(id))
+        .filter((feed): feed is FeedSummaryDto => feed !== undefined);
+      if (feeds.length !== state.feeds.length) {
+        return state;
+      }
+      return { ...state, feeds };
+    },
     setPage(state, page: number): FeedState {
       const total = state.selectedFeed?.episodes.length ?? 0;
       return { ...state, page: clampPage(page, total) };
@@ -284,6 +296,19 @@ export const feedModel = createModel<RootModel>()({
         );
       } finally {
         dispatch.feed.refreshAllFinished();
+      }
+    },
+    /** 拖拽排序：先乐观更新列表，再持久化；失败时重拉恢复真实顺序。 */
+    async reorderSubscriptions(feedIds: string[]): Promise<void> {
+      const previous = store.getState().feed.feeds.map((feed) => feed.id);
+      dispatch.feed.feedsReordered(feedIds);
+
+      try {
+        await reorderFeedsRequest(feedIds);
+      } catch (error) {
+        // 回滚到拖拽前的顺序，避免 UI 与数据库不一致。
+        dispatch.feed.feedsReordered(previous);
+        dispatch.feed.setError(error instanceof Error ? error.message : String(error));
       }
     },
     async removeSubscription(feedId: string): Promise<void> {
