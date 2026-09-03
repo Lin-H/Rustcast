@@ -1,3 +1,5 @@
+import { useEffect, useState } from "preact/hooks";
+import { getVersion } from "@tauri-apps/api/app";
 import { BrandIcon, RefreshIcon } from "./icons";
 import { useTranslator } from "../hooks/useTranslator";
 import { dispatch, useAppSelector } from "../store";
@@ -13,6 +15,23 @@ export function TopBar() {
   const theme = useAppSelector((state) => state.settings.theme);
   const language = useAppSelector((state) => state.settings.language);
   const updateStatus = useAppSelector((state) => state.update.status);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getVersion()
+      .then((version) => {
+        if (!cancelled) {
+          setAppVersion(version);
+        }
+      })
+      .catch(() => {
+        // 非 Tauri 环境（如浏览器 dev）静默降级，不显示版本号。
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const themeModes: Array<{ mode: ThemeMode; label: string }> = [
     { mode: "system", label: t("themeSystem") },
@@ -27,6 +46,14 @@ export function TopBar() {
         <span class="text-[17px] font-bold text-primary">Rustcast</span>
       </div>
       <span class="ml-3 text-xs text-faint">{t("appSubtitle")}</span>
+      {appVersion !== null && (
+        <span
+          class="ml-1.5 rounded-md bg-root px-1.5 py-0.5 text-[10px] font-medium text-faint"
+          title={`${t("appVersion")}: ${appVersion}`}
+        >
+          v{appVersion}
+        </span>
+      )}
 
       <div class="ml-auto flex items-center gap-2.5">
         <button
